@@ -58,3 +58,13 @@ def update_player(player_id):
         
     db.session.commit()
     return jsonify(serialize_player(player)), 200
+
+#Search Players by Name
+@players_bp.route("/players/search" , methods=["GET"])
+def search_players():
+    name_query = request.args.get("q")
+    if not name_query:
+        return jsonify({"error": "Name query parameter is required"}), 400
+    
+    players = Player.query.filter(Player.name.ilike(f"%{name_query}%")).all()
+    return jsonify([serialize_player(p) for p in players])
