@@ -1,6 +1,6 @@
 from flask import Flask, render_template
 from database import db
-from routes import players_bp, events_bp, sets_bp
+from routes import players_bp, events_bp, sets_bp, characters_bp
 
 
 app = Flask(__name__)
@@ -10,6 +10,7 @@ db.init_app(app)
 app.register_blueprint(players_bp)
 app.register_blueprint(events_bp)
 app.register_blueprint(sets_bp)
+app.register_blueprint(characters_bp)
 
 @app.route("/")
 def index():
