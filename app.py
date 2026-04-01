@@ -1,6 +1,6 @@
 from flask import Flask
 from database import db
-from routes import players_bp
+from routes import players_bp, events_bp
 
 
 app = Flask(__name__)
@@ -8,6 +8,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///ssbl.db"
 db.init_app(app)
 
 app.register_blueprint(players_bp)
+app.register_blueprint(events_bp)
 
 with app.app_context():
     import models # noqa F401: Models for DB
