@@ -22,10 +22,11 @@ class MatchSet(db.Model):
     bracketRound: Mapped[str] = mapped_column(String, nullable=False)
     player1ID: Mapped[int] = mapped_column(Integer, ForeignKey("player.id"), nullable=False)
     player2ID: Mapped[int] = mapped_column(Integer, ForeignKey("player.id"), nullable=False)
-    winnerID: Mapped[int] = mapped_column(Integer, ForeignKey("player.id"), nullable=False)
+    winnerID: Mapped[int | None] = mapped_column(Integer, ForeignKey("player.id"), nullable=True)
     vodFilename: Mapped[str | None] = mapped_column(String, nullable=True)
     vodTimestampStart: Mapped[float | None] = mapped_column(Float, nullable=True)
     vodTimestampEnd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    games: Mapped[list["Game"]] = db.relationship("Game", backref="match_set", lazy=True)
 
 class Game(db.Model):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
