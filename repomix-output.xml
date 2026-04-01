@@ -40,6 +40,12 @@ The content is organized as follows:
 </file_summary>
 
 <directory_structure>
+routes/
+  __init__.py
+  events.py
+  matches.py
+  players.py
+.gitignore
 app.py
 config.py
 database.py
@@ -51,14 +57,132 @@ TableStructure
 <files>
 This section contains the contents of the repository's files.
 
-<file path="app.py">
-from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
+<file path="routes/matches.py">
+from flask import Blueprint, jsonify, request
 from database import db
+from models import MatchSet, Game
 
-app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///ssbl.db"
-db.init_app(app)
+sets_bp = Blueprint("sets", __name__)
+
+def serialize_game(g):
+    return {
+        "id": g.id,
+        "setID": g.setID,
+        "gameNumber": g.gameNumber,
+        "player1Char": g.player1Char,
+        "player2Char": g.player2Char,
+        "winnerID": g.winnerID
+    }
+
+def serialize_set(s):
+    return {
+        "id": s.id,
+        "eventID": s.eventID,
+        "round": s.round,
+        "player1ID": s.player1ID,
+        "player2ID": s.player2ID,
+        "winnerID": s.winnerID,
+        "vodFilename": s.vodFilename,
+        "vodTimestampStart": s.vodTimestampStart,
+        "vodTimestampEnd": s.vodTimestampEnd,
+        "games": [serialize_game(g) for g in s.games]
+    }
+
+# Get Sets
+@sets_bp.route("/sets", methods=["GET"])
+def get_sets():
+    sets = MatchSet.query.all()
+    return jsonify([serialize_set(s) for s in sets])
+
+# Get Set By ID
+@sets_bp.route("/sets/<int:set_id>", methods=["GET"])
+def get_set(set_id):
+    match_set = MatchSet.query.get(set_id)
+    if match_set is None:
+        return jsonify({"error": "Set not found"}), 404
+    return jsonify(serialize_set(match_set))
+
+# Create Set
+@sets_bp.route("/sets", methods=["POST"])
+def create_set():
+    data = request.get_json()
+    print("Received Data:", data)  # Debugging line
+    print("Content-Type;", request.content_type)  # Debugging line
+    if not data or "eventID" not in data or "round" not in data or "player1ID" not in data or "player2ID" not in data or "winnerID" not in data:
+        return jsonify({"error": "Invalid request"}), 400
+    match_set = MatchSet(
+        eventID=data["eventID"],
+        round=data["round"],
+        player1ID=data["player1ID"],
+        player2ID=data["player2ID"],
+        winnerID=data.get("winnerID"),
+        vodFilename=data.get("vodFilename"),
+        vodTimestampStart=data.get("vodTimestampStart"),
+        vodTimestampEnd=data.get("vodTimestampEnd")
+    )
+    db.session.add(match_set)
+    db.session.commit()
+    return jsonify(serialize_set(match_set)), 201
+
+# Update Set
+@sets_bp.route("/sets/<int:set_id>", methods=["PUT"])
+def update_set(set_id):
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid request"}), 400
+    match_set = MatchSet.query.get(set_id)
+    if match_set is None:
+        return jsonify({"error": "Set not found"}), 404
+    for key, value in data.items():
+        if hasattr(match_set, key):
+            setattr(match_set, key, value)
+    db.session.commit()
+    return jsonify(serialize_set(match_set)), 200
+
+# Get Games
+@sets_bp.route("/sets/<int:set_id>/games", methods=["GET"])
+def get_games(set_id):
+    match_set = MatchSet.query.get(set_id)
+    if match_set is None:
+        return jsonify({"error": "Set not found"}), 404
+    return jsonify([serialize_game(g) for g in match_set.games]), 200
+
+# Create Game
+@sets_bp.route("/sets/<int:set_id>/games", methods=["POST"])
+def create_game(set_id):
+    data = request.get_json()
+    if not data or "gameNumber" not in data or "winnerID" not in data:
+        return jsonify({"error": "Invalid request"}), 400
+    match_set = MatchSet.query.get(set_id)
+    if match_set is None:
+        return jsonify({"error": "Set not found"}), 404
+    game = Game(
+        setID=set_id,
+        gameNumber=data["gameNumber"],
+        player1Char=data.get("player1Char"),
+        player2Char=data.get("player2Char"),
+        winnerID=data["winnerID"]
+    )
+    db.session.add(game)
+    db.session.commit()
+    return jsonify(serialize_game(game)), 201
+</file>
+
+<file path=".gitignore">
+.vscode/
+__pycache__/
+instance/
+venv/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+*.log
+*.bak
+*.tmp
+*.swp
+.DS_Store
 </file>
 
 <file path="config.py">
@@ -66,46 +190,14 @@ db.init_app(app)
 </file>
 
 <file path="database.py">
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import DeclarativeBase
 
-</file>
+class Base(DeclarativeBase):
+    pass
 
-<file path="models.py">
-from sqlalchemy import Integer, String, ForeignKey, Float
-from sqlalchemy.orm import Mapped, mapped_column
-from database import db
-
-
-class Player(db.Model):
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String, nullable=False)
-    defaultChar: Mapped[str | None] = mapped_column(String, nullable=True)
-    defaultCharColor: Mapped[str | None] = mapped_column(String, nullable=True)
-
-class Event(db.Model):
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    eventTitle: Mapped[str] = mapped_column(String, nullable=False)
-    eventDate: Mapped[str] = mapped_column(String, nullable=False)
-    bracketLink: Mapped[str | None] = mapped_column(String, nullable=True)
-
-class MatchSet(db.Model):
-    __tablename__ = "match_set"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    eventID: Mapped[int] = mapped_column(Integer, ForeignKey("event.id"), nullable=False)
-    bracketRound: Mapped[str] = mapped_column(String, nullable=False)
-    player1ID: Mapped[int] = mapped_column(Integer, ForeignKey("player.id"), nullable=False)
-    player2ID: Mapped[int] = mapped_column(Integer, ForeignKey("player.id"), nullable=False)
-    winnerID: Mapped[int] = mapped_column(Integer, ForeignKey("player.id"), nullable=False)
-    vodFilename: Mapped[str | None] = mapped_column(String, nullable=True)
-    vodTimestampStart: Mapped[float | None] = mapped_column(Float, nullable=True)
-    vodTimestampEnd: Mapped[float | None] = mapped_column(Float, nullable=True)
-
-class Game(db.Model):
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    setID: Mapped[int] = mapped_column(Integer, ForeignKey("match_set.id"), nullable=False)
-    gameNumber: Mapped[int] = mapped_column(Integer, nullable=False)
-    player1Char: Mapped[str | None] = mapped_column(String, nullable=True)
-    player2Char: Mapped[str | None] = mapped_column(String, nullable=True)
-    winnerID: Mapped[int] = mapped_column(Integer, ForeignKey("player.id"), nullable=False)
+db = SQLAlchemy(model_class=Base)
 </file>
 
 <file path="requirements.txt">
@@ -142,6 +234,206 @@ Games
     P1Char
     P2Char
     WinnerID (FK -> Players)
+</file>
+
+<file path="routes/events.py">
+from flask import Blueprint, jsonify, request
+from database import db
+from models import Event
+
+events_bp = Blueprint("events", __name__)
+
+def serialize_event(e):
+    return {
+        "id": e.id,
+        "eventTitle": e.eventTitle,
+        "eventDate": e.eventDate,
+        "bracketLink": e.bracketLink
+    }
+
+@events_bp.route("/events", methods=["GET"])
+def get_events():
+    events = Event.query.all()
+    return jsonify([serialize_event(e) for e in events])
+
+@events_bp.route("/events/<int:event_id>", methods=["GET"])
+def get_event(event_id):
+    event = Event.query.get(event_id)
+    if event is None:
+        return jsonify({"error": "Event not found"}), 404
+    return jsonify(serialize_event(event))
+
+@events_bp.route("/events", methods=["POST"])
+def create_event():
+    data = request.get_json()
+    if not data or "eventTitle" not in data:
+        return jsonify({"error": "Invalid request"}), 400
+    event = Event(
+        eventTitle=data["eventTitle"],
+        eventDate=data["eventDate"],
+        bracketLink=data.get("bracketLink")
+    )
+    db.session.add(event)
+    db.session.commit()
+    return jsonify(serialize_event(event)), 201
+
+@events_bp.route("/events/<int:event_id>", methods=["PUT"])
+def update_event(event_id):
+    event = Event.query.get(event_id)
+    if event is None:
+        return jsonify({"error": "Event not found"}), 404
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid request"}), 400
+    
+    if "eventTitle" in data:
+        event.eventTitle = data["eventTitle"]
+    if "eventDate" in data:
+        event.eventDate = data["eventDate"]
+    if "bracketLink" in data:
+        event.bracketLink = data["bracketLink"]
+    
+    db.session.commit()
+    return jsonify(serialize_event(event)), 200
+</file>
+
+<file path="routes/players.py">
+from flask import Blueprint, jsonify, request
+from database import db
+from models import Player
+
+players_bp = Blueprint("players", __name__)
+
+def serialize_player(p):
+    return {
+        "id": p.id,
+        "name": p.name,
+        "defaultChar": p.defaultChar,
+        "defaultCharColor": p.defaultCharColor
+    }
+
+@players_bp.route("/players", methods=["GET"])
+def get_players():
+    players = Player.query.all()
+    return jsonify([serialize_player(p) for p in players])
+
+@players_bp.route("/players/<int:player_id>", methods=["GET"])
+def get_player(player_id):
+    player = Player.query.get(player_id)
+    if player is None:
+        return jsonify({"error": "Player not found"}), 404
+    return jsonify(serialize_player(player))
+
+
+@players_bp.route("/players", methods=["POST"])
+def create_player():
+    data = request.get_json()
+    if not data or "name" not in data:
+        return jsonify({"error": "Invalid request"}), 400
+    player = Player(
+        name=data["name"],
+        defaultChar=data["defaultChar"],
+        defaultCharColor=data["defaultCharColor"]
+    )
+    db.session.add(player)
+    db.session.commit()
+    return jsonify(serialize_player(player)), 201
+    
+@players_bp.route("/players/<int:player_id>", methods=["PUT"])
+def update_player(player_id):
+    player = Player.query.get(player_id)
+    if player is None:
+        return jsonify({"error": "Player not found"}), 404
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid request"}), 400
+    
+    if "name" in data:
+        player.name = data["name"]
+    if "defaultChar" in data:
+        player.defaultChar = data["defaultChar"]
+    if "defaultCharColor" in data:
+        player.defaultCharColor = data["defaultCharColor"]
+        
+    db.session.commit()
+    return jsonify(serialize_player(player)), 200
+</file>
+
+<file path="models.py">
+from sqlalchemy import Integer, String, ForeignKey, Float
+from sqlalchemy.orm import Mapped, mapped_column
+from database import db
+
+
+class Player(db.Model):
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    defaultChar: Mapped[str | None] = mapped_column(String, nullable=True)
+    defaultCharColor: Mapped[str | None] = mapped_column(String, nullable=True)
+
+class Event(db.Model):
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    eventTitle: Mapped[str] = mapped_column(String, nullable=False)
+    eventDate: Mapped[str] = mapped_column(String, nullable=False)
+    bracketLink: Mapped[str | None] = mapped_column(String, nullable=True)
+
+class MatchSet(db.Model):
+    __tablename__ = "match_set"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    eventID: Mapped[int] = mapped_column(Integer, ForeignKey("event.id"), nullable=False)
+    bracketRound: Mapped[str] = mapped_column(String, nullable=False)
+    player1ID: Mapped[int] = mapped_column(Integer, ForeignKey("player.id"), nullable=False)
+    player2ID: Mapped[int] = mapped_column(Integer, ForeignKey("player.id"), nullable=False)
+    winnerID: Mapped[int | None] = mapped_column(Integer, ForeignKey("player.id"), nullable=True)
+    vodFilename: Mapped[str | None] = mapped_column(String, nullable=True)
+    vodTimestampStart: Mapped[float | None] = mapped_column(Float, nullable=True)
+    vodTimestampEnd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    games: Mapped[list["Game"]] = db.relationship("Game", backref="match_set", lazy=True)
+
+class Game(db.Model):
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    setID: Mapped[int] = mapped_column(Integer, ForeignKey("match_set.id"), nullable=False)
+    gameNumber: Mapped[int] = mapped_column(Integer, nullable=False)
+    player1Char: Mapped[str | None] = mapped_column(String, nullable=True)
+    player2Char: Mapped[str | None] = mapped_column(String, nullable=True)
+    winnerID: Mapped[int] = mapped_column(Integer, ForeignKey("player.id"), nullable=False)
+</file>
+
+<file path="routes/__init__.py">
+from .players import players_bp
+from .events import events_bp
+from .matches import sets_bp
+</file>
+
+<file path="app.py">
+from flask import Flask
+from database import db
+from routes import players_bp, events_bp, sets_bp
+
+
+app = Flask(__name__)
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///ssbl.db"
+db.init_app(app)
+
+app.register_blueprint(players_bp)
+app.register_blueprint(events_bp)
+app.register_blueprint(sets_bp)
+
+
+with app.app_context():
+    import models # noqa F401: Models for DB
+    db.create_all()
+
+if __name__ == "__main__":
+    app.run(debug=True)
+    
+    
+
+@app.route('/')
+def index():
+    return 'Index Page'
 </file>
 
 </files>

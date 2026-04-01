@@ -18,7 +18,7 @@ def serialize_set(s):
     return {
         "id": s.id,
         "eventID": s.eventID,
-        "round": s.round,
+        "round": s.bracketRound,
         "player1ID": s.player1ID,
         "player2ID": s.player2ID,
         "winnerID": s.winnerID,
@@ -46,11 +46,13 @@ def get_set(set_id):
 @sets_bp.route("/sets", methods=["POST"])
 def create_set():
     data = request.get_json()
-    if not data or "eventID" not in data or "round" not in data or "player1ID" not in data or "player2ID" not in data or "winnerID" not in data:
+    print("Received Data:", data)  # Debugging line
+    print("Content-Type;", request.content_type)  # Debugging line
+    if not data or "eventID" not in data or "bracketRound" not in data or "player1ID" not in data or "player2ID" not in data:
         return jsonify({"error": "Invalid request"}), 400
     match_set = MatchSet(
         eventID=data["eventID"],
-        round=data["round"],
+        bracketRound=data["bracketRound"],
         player1ID=data["player1ID"],
         player2ID=data["player2ID"],
         winnerID=data.get("winnerID"),

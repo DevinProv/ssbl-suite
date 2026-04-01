@@ -12,3 +12,4 @@ venv/
 *.tmp
 *.swp
 .DS_Store
+repomix-output.xml
