@@ -6,13 +6,34 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}SSBL{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css')}}">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg:              {{ theme.bg }};
+            --surface:         {{ theme.surface }};
+            --surface-2:       {{ theme.surface_2 }};
+            --surface-3:       {{ theme.surface_3 }};
+            --primary:         {{ theme.primary }};
+            --primary-dim:     {{ theme.primary_dim }};
+            --secondary:       {{ theme.secondary }};
+            --on-primary:      {{ theme.on_primary }};
+            --on-surface:      {{ theme.on_surface }};
+            --on-surface-dim:  {{ theme.on_surface_dim }};
+            --outline:         {{ theme.outline }};
+            --outline-bright:  {{ theme.outline_bright }};
+            --danger:          {{ theme.danger }};
+            --success:         {{ theme.success }};
+            --warning:         {{ theme.warning }};
+        }
+    </style>
+    {% block styles %}{% endblock %}
 </head>
 
 <body>
     <nav class="sidebar">
-        <a href="/dashboard">Dashboard</a>
-        <a href="/players">Players</a>
-        <a href="/settings">Settings</a>
+        <a href="/dashboard" class="{{ 'active' if request.path == '/dashboard' or request.path == '/' else '' }}">Dashboard</a>
+        <a href="/players" class="{{ 'active' if request.path == '/players' else '' }}">Players</a>
+        <a href="/settings" class="{{ 'active' if request.path == '/settings' else '' }}">Settings</a>
     </nav>
     <main class="content">
         {% block content %}{% endblock %}

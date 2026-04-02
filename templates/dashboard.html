@@ -1,30 +1,51 @@
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
-
+{% block styles %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css')}}">
+{% endblock %}
 {% block content %}
     <div class="container">
         <h1>Dashboard</h1>
-        <div class="section">
-            <label>Event:</label>
-            <select id="event-select"></select>
-            <label>Round:</label>
-            <input type="text" id="round-input" placeholder="e.g. Winners Finals">
-            <button id="start-set-btn">Start Set</button>
-            <button id="end-set-btn">End Set</button>
+        <div class="match-controls">
+            <div class="control-group">
+                <label>Event</label>
+                <select id="event-select"></select>
+            </div>
+            <div class="control-group grow">
+                <label>Round</label>
+                <input type="text" id="round-input" placeholder="e.g. Winners Finals">
+            </div>
+            <div class="match-actions">
+                <button id="start-set-btn">Start Set</button>
+                <button id="end-set-btn">End Set</button>
+            </div>
         </div>
         
         <template id="player-card-template">
             <div class="card">
-                <h2 class="card-title">Player</h2>
-                <input type="text" class="player-input" placeholder="Player Name...">
-                <div class="autocomplete-results"></div>
-                <button class="save-player-btn" style="display:none">Save Player</button>
-                <select class="char-select"></select>
-                <select class="color-select"></select>
-                <div class="score">
-                    <span class="player-score">0</span>
+                <div class="card-header">
+                    <h2 class="card-title">Player</h2>
+                    <div class="player-input-wrapper" style="display:none; flex:1;">
+                        <input type="text" class="player-ghost" disabled-tabindex="-1">
+                        <input type="text" class="player-input" placeholder="Player Name...">
+                    </div>
+                    <div class="autocomplete-results"></div>
+                    <button class="save-player-btn" style="display:none;" title="Save Player">💾</button>
                 </div>
-                <button class="winner-btn">Declare Winner</button>
+                <div class="char-image-container">
+                    <div class="char-image-placeholder">?</div>
+                    <img class="char-image" src="" style="display: none;">
+                </div>
+                <div class="card-body">
+                    <select class="char-select"></select>
+                    <select class="color-select"></select>
+                    <div class="score">
+                        <span class="player-score">0</span>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button class="winner-btn">Declare Winner</button>
+                </div>
             </div>
         </template>
 

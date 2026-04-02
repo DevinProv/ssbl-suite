@@ -1,0 +1,41 @@
+{
+    "active": "midnight_arena",
+    "themes": {
+        "midnight_arena": {
+            "name": "Midnight Arena",
+            "bg": "#1a1c1e",
+            "surface": "#242729",
+            "surface_2": "#2e3133",
+            "surface_3": "#383c3e",
+            "primary": "#4fc3d4",
+            "primary_dim": "#2a8a97",
+            "secondary": "#c6c5b9",
+            "on_primary": "#1a1c1e",
+            "on_surface": "#f0f0f2",
+            "on_surface_dim": "#9a9a9e",
+            "outline": "#4a4e52",
+            "outline_bright": "#6a6e72",
+            "danger": "#e05c5c",
+            "success": "#5cb85c",
+            "warning": "#e0a050"
+        },
+        "moonlit_mist": {
+            "name": "Moonlit Mist",
+            "bg": "#393d3f",
+            "surface": "#454a4d",
+            "surface_2": "#4e5457",
+            "surface_3": "#586063",
+            "primary": "#62929e",
+            "primary_dim": "#3d6b75",
+            "secondary": "#c6c5b9",
+            "on_primary": "#393d3f",
+            "on_surface": "#fdfdff",
+            "on_surface_dim": "#a0a0a5",
+            "outline": "#6a6e72",
+            "outline_bright": "#8a8e92",
+            "danger": "#e05c5c",
+            "success": "#5cb85c",
+            "warning": "#e0a050"
+        }
+    }
+}

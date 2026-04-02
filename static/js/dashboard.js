@@ -19,7 +19,7 @@ let state = {
     gameNumber: 1
 }
 let availableChars = [];
-
+let suppressBlur = false;
 function createPlayerCard(playerNum){
     const template = document.getElementById("player-card-template");
     const clone = template.content.cloneNode(true);
@@ -27,7 +27,7 @@ function createPlayerCard(playerNum){
 
     card.id = `player${playerNum}-card`;
     clone.querySelector(".card-title").textContent = `Player ${playerNum}`;
-
+    clone.querySelector(".card-title").dataset.player = playerNum;
     clone.querySelector(".player-input").dataset.player = playerNum;
     clone.querySelector(".char-select").dataset.player = playerNum;
     clone.querySelector(".color-select").dataset.player = playerNum;
@@ -103,64 +103,97 @@ function clearAutoComplete(playerNum){
     const card = document.getElementById(`player${playerNum}-card`);
     card.querySelector(".autocomplete-results").innerHTML = "";
 }
-function selectPlayer(playerNum, player){
+async function selectPlayer(playerNum, player) {
+    suppressBlur = true; // prevent focusout from interfering
+    
     state[`player${playerNum}`].id = player.id;
     state[`player${playerNum}`].name = player.name;
-    state[`player${playerNum}`].char = player.defaultChar;
-    state[`player${playerNum}`].color = player.defaultCharColor;
+    state[`player${playerNum}`].char = player.defaultChar || "";
+    state[`player${playerNum}`].color = player.defaultCharColor || "";
 
-    // Update UI
     const card = document.getElementById(`player${playerNum}-card`);
     card.querySelector(".player-input").value = player.name;
     card.querySelector(".card-title").textContent = player.name;
 
     clearAutoComplete(playerNum);
+    disableNameEdit(playerNum);
 
-    if(player.defaultChar){
+    if (player.defaultChar) {
         card.querySelector(".char-select").value = player.defaultChar;
-        fetchCharColors(playerNum, player.defaultChar);
+        await fetchCharColors(playerNum, player.defaultChar);
+        if (player.defaultCharColor) {
+            card.querySelector(".color-select").value = player.defaultCharColor;
+        }
     }
+
+    const saveBtn = card.querySelector(".save-player-btn");
+    saveBtn.style.display = "block";
+    saveBtn.textContent = "🔄";
+    saveBtn.title = "Update Defaults";
+
+    setTimeout(() => { suppressBlur = false; }, 200);
+}
+// Edit Name Swap
+function enableNameEdit(playerNum) {
+    const card = document.getElementById(`player${playerNum}-card`);
+    const title = card.querySelector(".card-title");
+    const wrapper = card.querySelector(".player-input-wrapper");
+    const input = card.querySelector(".player-input");
+
+    input.value = title.textContent === `Player ${playerNum}` ? "" : title.textContent;
+    title.style.display = "none";
+    wrapper.style.display = "flex";
+    input.focus();
+    input.select();
 }
 
+function disableNameEdit(playerNum) {
+    const card = document.getElementById(`player${playerNum}-card`);
+    const title = card.querySelector(".card-title");
+    const wrapper = card.querySelector(".player-input-wrapper");
+    const input = card.querySelector(".player-input");
+    const ghost = card.querySelector(".player-ghost");
+
+    if (input.value.trim()) {
+        title.textContent = input.value.trim();
+    }
+    wrapper.style.display = "none";
+    title.style.display = "block";
+    if (ghost) ghost.value = "";
+    clearAutoComplete(playerNum);
+}
 // Save/Update Player
-async function savePlayer(playerNum){
+async function savePlayer(playerNum) {
     const card = document.getElementById(`player${playerNum}-card`)
-    const name = card.querySelector(".player-input").value;
-    const char = card.querySelector(".char-select").value;
-    const color = card.querySelector(".color-select").value;
-    const data = {
-        name: name,
-        defaultChar: char,
-        defaultCharColor: color
-    };
-    let response;
-    if(state[`player${playerNum}`].id === null){
+    const name = card.querySelector(".player-input").value || card.querySelector(".card-title").textContent
+    const char = card.querySelector(".char-select").value
+    const color = card.querySelector(".color-select").value
+    const data = { name, defaultChar: char, defaultCharColor: color }
+
+    let response
+    if (state[`player${playerNum}`].id === null) {
         response = await fetch("/api/players", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(data)
-        });
+        })
     } else {
         response = await fetch(`/api/players/${state[`player${playerNum}`].id}`, {
             method: "PUT",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(data)
-        });
+        })
     }
 
-    const player = await response.json();
+    const player = await response.json()
+    state[`player${playerNum}`].id = player.id
+    state[`player${playerNum}`].name = player.name
+    state[`player${playerNum}`].char = player.defaultChar
+    state[`player${playerNum}`].color = player.defaultCharColor
 
-    state[`player${playerNum}`].id = player.id;
-    state[`player${playerNum}`].name = player.name;
-    state[`player${playerNum}`].char = player.defaultChar;
-    state[`player${playerNum}`].color = player.defaultCharColor;
-
-    card.querySelector(".save-player-btn").style.display = "none";
-    card.querySelector(".card-title").textContent = player.name;
+    card.querySelector(".card-title").textContent = player.name
+    card.querySelector(".save-player-btn").style.display = "none"
+    disableNameEdit(playerNum)
 }
 
 // Start/End Set
@@ -237,7 +270,25 @@ async function updateScore(playerNum, delta){
     const card = document.getElementById(`player${playerNum}-card`);
     card.querySelector(".player-score").textContent = state[`player${playerNum}`].score;
 }
-            
+
+// Update Character Image
+function updateCharacterImage(playerNum){
+    const card = document.getElementById(`player${playerNum}-card`);
+    const placeholder = card.querySelector(".char-image-placeholder");
+    const img = card.querySelector(".char-image");
+    const char = state[`player${playerNum}`].char;
+    const color = state[`player${playerNum}`].color;
+
+    if (char && color){
+        img.src = `/api/characters/${char}/${color}/image`;
+        placeholder.style.display = "none";
+        img.style.display = "block";
+    } else {
+        img.src = "";
+        placeholder.style.display = "flex";
+        img.style.display = "none";
+    }
+}
 // On DOM Load
 document.addEventListener("DOMContentLoaded", () => {
     createPlayerCard(1);
@@ -246,57 +297,145 @@ document.addEventListener("DOMContentLoaded", () => {
     fetchChars();
     // Name Autocomplete Listener
     document.getElementById("player-cards-container").addEventListener("input", async (e) => {
-        if (!e.target.classList.contains("player-input")) return
+        if (!e.target.classList.contains("player-input")) return;
         const playerNum = e.target.dataset.player;
-        const query = e.target.value;
-        if(query.length < 1) {
+        const query = e.target.value.trim();
+        const card = document.getElementById(`player${playerNum}-card`);
+        const ghost = card.querySelector(".player-ghost");
+        
+        if (query.length < 1) {
             clearAutoComplete(playerNum);
+            if (ghost) ghost.value = "";
             return;
         }
-        const response = await fetch(`api/players/search?q=${query}`);
-        const players = await response.json();
-        showAutoComplete(playerNum, players);
 
-        if(players.length === 0 && query.length > 0){
-            const card = document.getElementById(`player${playerNum}-card`);
-            card.querySelector(".save-player-btn").style.display = "block";
-            card.querySelector(".save-player-btn").textContent = "Save Player";
+        const response = await fetch(`/api/players/search?q=${query}`);
+        const players = await response.json();
+        const exactMatch = players.find(p => p.name.toLowerCase() === query.toLowerCase());
+        console.log("query: ",query, "exactMatch: ", exactMatch);
+        if (exactMatch) {
+            if (ghost) ghost.value = "";
+            await selectPlayer(playerNum, exactMatch);
+            return;
+        }
+        if (players.length > 0) {
+            const topMatch = players[0].name;
+            if (topMatch.toLowerCase().startsWith(query.toLowerCase())) {
+                if (ghost) ghost.value = topMatch;
+            } else {
+                if (ghost) ghost.value = ""
+            }
+        } else {
+            if (ghost) {
+                ghost.value = "";
+            }
+        }
+        showAutoComplete(playerNum, players);
+        updateCharacterImage(playerNum);
+        const saveBtn = card.querySelector(".save-player-btn");
+
+        if (players.length === 0 && query.length > 0) {
+            saveBtn.style.display = "block";
+            saveBtn.textContent = "💾";
+            saveBtn.title = "Save New Player";
+        } else {
+            saveBtn.style.display = "none";
         }
     });
     // Round Input Listener
     document.getElementById("round-input").addEventListener("input", (e) => {
         state.bracketRound = e.target.value;
     }); 
-    // Save Player Listener
-    document.getElementById("player-cards-container").addEventListener("click", async(e) => {
-        if (!e.target.classList.contains("save-player-btn")) return
+    // Event Select Listener
+    document.getElementById("event-select").addEventListener("change", (e) => {
+        state.eventID = e.target.value ? parseInt(e.target.value) : null
+    });
+
+    // Blur Player Name Listener
+    document.getElementById("player-cards-container").addEventListener("focusout", (e) => {
+        if (!e.target.classList.contains("player-input")) return
+        if (suppressBlur) return;
+        const playerNum = e.target.dataset.player
+        // Small delay so autocomplete clicks register first
+        setTimeout(() => disableNameEdit(playerNum), 150)
+    });
+    // Enter Key Player Name Listener
+    document.getElementById("player-cards-container").addEventListener("keydown", (e) => {
+        if (!e.target.classList.contains("player-input")) return
+        if (e.key === "Enter") {
+            const playerNum = e.target.dataset.player
+            disableNameEdit(playerNum)
+        }
+    });
+    // Ghost Listener
+    document.getElementById("player-cards-container").addEventListener("keydown", (e) => {
+        if (!e.target.classList.contains("player-input")) return;
         const playerNum = e.target.dataset.player;
-        await savePlayer(playerNum);
+        const card = document.getElementById(`player${playerNum}-card`);
+        const ghost = card.querySelector(".player-ghost");
+
+        if (e.key === "Tab" && ghost && ghost.value) {
+            e.preventDefault();
+            e.target.value = ghost.value; 
+            ghost.value = "";
+            e.target.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+
+        if (e.key === "Enter") {
+            disableNameEdit(playerNum);
+        }
+
+        if (e.key === "ArrowRight") {
+            const cursorAtEnd = e.target.selectionStart === e.target.value.length;
+            if (cursorAtEnd && ghost && ghost.value) {
+                e.target.value = ghost.value;
+                ghost.value = "";
+                e.target.dispatchEvent(new Event("input", { bubbles: true}));
+            }
+        }
     });
     //Character Select Listener
     document.getElementById("player-cards-container").addEventListener("change", async (e) => {
         const playerNum = e.target.dataset.player;
-        const charName = e.target.value;
+        const card = document.getElementById(`player${playerNum}-card`);
         if (e.target.classList.contains("char-select")){
             state[`player${playerNum}`].char = e.target.value;
-            if(e.target.value) fetchCharColors(playerNum, e.target.value);
+            state[`player${playerNum}`].color = "";
+            if(e.target.value) {
+                await fetchCharColors(playerNum, e.target.value);
+                const colorSelect = card.querySelector(".color-select");
+                if(colorSelect.options.length > 1){
+                    colorSelect.selectedIndex = 1;
+                    state[`player${playerNum}`].color = colorSelect.value;
+                }
+            }
         }
         if(e.target.classList.contains("color-select")){
             state[`player${playerNum}`].color = e.target.value;
         }
-        
+        updateCharacterImage(playerNum);
         if (state[`player${playerNum}`].id !== null){
-            const card = document.getElementById(`player${playerNum}-card`);
+            
             const saveBtn = card.querySelector(".save-player-btn");
             saveBtn.style.display = "block";
-            saveBtn.textContent = "Update Defaults";
+            saveBtn.textContent = "🔄";
+            saveBtn.title = "Update Defaults";
         }
     });
-    // Game Winner Listener
+    // Click Listeners for Player Cards
     document.getElementById("player-cards-container").addEventListener("click", async (e) => {
-        if (!e.target.classList.contains("winner-btn")) return
-        const playerNum = e.target.dataset.player;
-        await updateScore(playerNum, 1);
+        if (e.target.classList.contains("card-title")) {
+            const playerNum = e.target.dataset.player;
+            enableNameEdit(playerNum);
+        }
+        if (e.target.classList.contains("save-player-btn")) {
+            const playerNum = e.target.dataset.player;
+            await savePlayer(playerNum);
+        }
+        if (e.target.classList.contains("winner-btn")) {
+            const playerNum = e.target.dataset.player;
+            await updateScore(playerNum, 1);
+        }
     });
     // Set Control Listeners
     document.getElementById("start-set-btn").addEventListener("click", startSet);
