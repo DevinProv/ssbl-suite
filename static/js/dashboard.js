@@ -52,7 +52,6 @@ async function fetchEvents(){
         state.eventID = events[0].id;
     }
 }
-
 async function fetchChars(){
     const response = await fetch("api/characters")
     availableChars = await response.json();
@@ -118,12 +117,127 @@ function selectPlayer(playerNum, player){
     clearAutoComplete(playerNum);
 
     if(player.defaultChar){
+        card.querySelector(".char-select").value = player.defaultChar;
         fetchCharColors(playerNum, player.defaultChar);
     }
 }
 
+// Save/Update Player
+async function savePlayer(playerNum){
+    const card = document.getElementById(`player${playerNum}-card`)
+    const name = card.querySelector(".player-input").value;
+    const char = card.querySelector(".char-select").value;
+    const color = card.querySelector(".color-select").value;
+    const data = {
+        name: name,
+        defaultChar: char,
+        defaultCharColor: color
+    };
+    let response;
+    if(state[`player${playerNum}`].id === null){
+        response = await fetch("/api/players", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(data)
+        });
+    } else {
+        response = await fetch(`/api/players/${state[`player${playerNum}`].id}`, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(data)
+        });
+    }
 
+    const player = await response.json();
 
+    state[`player${playerNum}`].id = player.id;
+    state[`player${playerNum}`].name = player.name;
+    state[`player${playerNum}`].char = player.defaultChar;
+    state[`player${playerNum}`].color = player.defaultCharColor;
+
+    card.querySelector(".save-player-btn").style.display = "none";
+    card.querySelector(".card-title").textContent = player.name;
+}
+
+// Start/End Set
+async function startSet(){
+    if (!state.eventID || !state.bracketRound || !state.player1.id || !state.player2.id){
+        alert("Please select an event, enter a round, and select both players before starting the set.");
+        return;
+    }
+    const response = await fetch("/api/sets", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            eventID: state.eventID,
+            bracketRound: state.bracketRound,
+            player1ID: state.player1.id,
+            player2ID: state.player2.id,
+            //TODO: Implement VOD Integration when OBS Websocket Integration is added
+            vodFilename: "",
+            vodTimestampStart: null, 
+            vodTimestampEnd: null,
+            winnerID: null
+        })
+    });
+    const match_set = await response.json();
+    state.setID = match_set.id;
+    document.getElementById("start-set-btn").style.display = "none";
+    document.getElementById("end-set-btn").style.display = "block";
+}
+async function endSet(){
+    const response = await fetch(`/api/sets/${state.setID}`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            //Todo: Implement VOD Integration when OBS Websocket Integration is added
+            vodTimestampEnd: null,
+            winnerID: state.player1.score > state.player2.score ? state.player1.id : state.player2.id
+        })
+    });
+    const match_set = await response.json();
+    state.setID = null;
+    document.getElementById("start-set-btn").style.display = "block";
+    document.getElementById("end-set-btn").style.display = "none";
+}
+// Get Current Game Number
+async function getCurrentGameNumber(){
+    const response = await fetch(`/api/sets/${state.setID}/games`);
+    const games = await response.json();
+    return games.length + 1;
+}
+// Add Match to Set
+async function addMatch(winnerID){
+    const response = await fetch(`/api/sets/${state.setID}/games`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            setID: state.setID,
+            gameNumber: await getCurrentGameNumber(),
+            player1Char: state.player1.char,
+            player2Char: state.player2.char,
+            winnerID: winnerID,
+        })
+    });
+}
+// Update Score
+async function updateScore(playerNum, delta){
+    state[`player${playerNum}`].score += delta;
+    await addMatch(state[`player${playerNum}`].id);
+    const card = document.getElementById(`player${playerNum}-card`);
+    card.querySelector(".player-score").textContent = state[`player${playerNum}`].score;
+}
+            
 // On DOM Load
 document.addEventListener("DOMContentLoaded", () => {
     createPlayerCard(1);
@@ -142,18 +256,49 @@ document.addEventListener("DOMContentLoaded", () => {
         const response = await fetch(`api/players/search?q=${query}`);
         const players = await response.json();
         showAutoComplete(playerNum, players);
+
+        if(players.length === 0 && query.length > 0){
+            const card = document.getElementById(`player${playerNum}-card`);
+            card.querySelector(".save-player-btn").style.display = "block";
+            card.querySelector(".save-player-btn").textContent = "Save Player";
+        }
+    });
+    // Round Input Listener
+    document.getElementById("round-input").addEventListener("input", (e) => {
+        state.bracketRound = e.target.value;
+    }); 
+    // Save Player Listener
+    document.getElementById("player-cards-container").addEventListener("click", async(e) => {
+        if (!e.target.classList.contains("save-player-btn")) return
+        const playerNum = e.target.dataset.player;
+        await savePlayer(playerNum);
     });
     //Character Select Listener
     document.getElementById("player-cards-container").addEventListener("change", async (e) => {
-        if (!e.target.classList.contains("char-select")) return
         const playerNum = e.target.dataset.player;
         const charName = e.target.value;
+        if (e.target.classList.contains("char-select")){
+            state[`player${playerNum}`].char = e.target.value;
+            if(e.target.value) fetchCharColors(playerNum, e.target.value);
+        }
+        if(e.target.classList.contains("color-select")){
+            state[`player${playerNum}`].color = e.target.value;
+        }
         
-        state[`player${playerNum}`].char = charName;
-        
-        if(charName){
-            fetchCharColors(playerNum, charName);
+        if (state[`player${playerNum}`].id !== null){
+            const card = document.getElementById(`player${playerNum}-card`);
+            const saveBtn = card.querySelector(".save-player-btn");
+            saveBtn.style.display = "block";
+            saveBtn.textContent = "Update Defaults";
         }
     });
-
+    // Game Winner Listener
+    document.getElementById("player-cards-container").addEventListener("click", async (e) => {
+        if (!e.target.classList.contains("winner-btn")) return
+        const playerNum = e.target.dataset.player;
+        await updateScore(playerNum, 1);
+    });
+    // Set Control Listeners
+    document.getElementById("start-set-btn").addEventListener("click", startSet);
+    document.getElementById("end-set-btn").addEventListener("click", endSet);
 });

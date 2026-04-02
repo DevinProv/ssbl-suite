@@ -14,7 +14,7 @@ app.register_blueprint(characters_bp, url_prefix="/api")
 
 @app.route("/")
 def index():
-    return render_template("base.html")
+    return render_template("dashboard.html")
 
 @app.route("/dashboard")
 def dashboard():
