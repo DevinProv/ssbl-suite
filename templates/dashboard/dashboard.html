@@ -1,40 +1,34 @@
-<!DOCTYPE HTML>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Dashboard</title>
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
-    </head>
-    <body>
-        <div class="container">
-            <h1>Dashboard</h1>
-            <div class="section">
-                <label>Event:</label>
-                <select id="event-select"></select>
-                <label>Round:</label>
-                <input type="text" id="round-input" placeholder="e.g. Winners Finals">
-                <button id="start-match-btn">Start Set</button>
-                <button id="end-match-btn">End Set</button>
-            </div>
-            
-            <template id="player-card-template">
-                <div class="card">
-                    <h2 class="card-title">Player</h2>
-                    <input type="text" class="player-input" placeholder="Player Name...">
-                    <div class="autocomplete-results"></div>
-                    <button class="save-player-btn" style="display:none">Save Player</button>
-                    <select class="char-select"></select>
-                    <select class="color-select"></select>
-                    <div class="score">
-                        <span class="player-score">0</span>
-                    </div>
-                    <button class="winner-btn">Declare Winner</button>
-                </div>
-            </template>
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
 
-            <div id="player-cards-container"></div>
+{% block content %}
+    <div class="container">
+        <h1>Dashboard</h1>
+        <div class="section">
+            <label>Event:</label>
+            <select id="event-select"></select>
+            <label>Round:</label>
+            <input type="text" id="round-input" placeholder="e.g. Winners Finals">
+            <button id="start-match-btn">Start Set</button>
+            <button id="end-match-btn">End Set</button>
         </div>
-        <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
-    </body>
-</html>
+        
+        <template id="player-card-template">
+            <div class="card">
+                <h2 class="card-title">Player</h2>
+                <input type="text" class="player-input" placeholder="Player Name...">
+                <div class="autocomplete-results"></div>
+                <button class="save-player-btn" style="display:none">Save Player</button>
+                <select class="char-select"></select>
+                <select class="color-select"></select>
+                <div class="score">
+                    <span class="player-score">0</span>
+                </div>
+                <button class="winner-btn">Declare Winner</button>
+            </div>
+        </template>
+
+        <div id="player-cards-container"></div>
+    </div>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}
