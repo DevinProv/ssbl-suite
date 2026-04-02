@@ -38,7 +38,7 @@ function createPlayerCard(playerNum){
 }
 // Fetch Data
 async function fetchEvents(){
-    const response = await fetch("/events");
+    const response = await fetch("api/events");
     const events = await response.json();
     const eventSelect = document.getElementById("event-select");
     eventSelect.innerHTML = "<option value=''>Select Event</option>";
@@ -54,7 +54,7 @@ async function fetchEvents(){
 }
 
 async function fetchChars(){
-    const response = await fetch("/characters")
+    const response = await fetch("api/characters")
     availableChars = await response.json();
 
     document.querySelectorAll(".char-select").forEach(select => {
@@ -68,7 +68,7 @@ async function fetchChars(){
     });
 }
 async function fetchCharColors(playerNum, charName){
-    const response = await fetch(`/characters/${charName}/colors`);
+    const response = await fetch(`api/characters/${charName}/colors`);
     const colors = await response.json();
 
     const card = document.getElementById(`player${playerNum}-card`);
@@ -139,7 +139,7 @@ document.addEventListener("DOMContentLoaded", () => {
             clearAutoComplete(playerNum);
             return;
         }
-        const response = await fetch(`/players/search?q=${query}`);
+        const response = await fetch(`api/players/search?q=${query}`);
         const players = await response.json();
         showAutoComplete(playerNum, players);
     });

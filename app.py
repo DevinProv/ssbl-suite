@@ -7,10 +7,10 @@ app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///ssbl.db"
 db.init_app(app)
 
-app.register_blueprint(players_bp)
-app.register_blueprint(events_bp)
-app.register_blueprint(sets_bp)
-app.register_blueprint(characters_bp)
+app.register_blueprint(players_bp, url_prefix="/api")
+app.register_blueprint(events_bp, url_prefix="/api")
+app.register_blueprint(sets_bp, url_prefix="/api")
+app.register_blueprint(characters_bp, url_prefix="/api")
 
 @app.route("/")
 def index():
@@ -18,9 +18,11 @@ def index():
 
 @app.route("/dashboard")
 def dashboard():
-    return render_template("dashboard/dashboard.html")
+    return render_template("dashboard.html")
 
-
+@app.route("/players")
+def players_page():
+    return render_template("players.html")
 
 with app.app_context():
     import models # noqa F401: Models for DB
