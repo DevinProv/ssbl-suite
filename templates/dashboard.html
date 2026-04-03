@@ -6,6 +6,7 @@
 {% block content %}
     <div class="container">
         <h1>Dashboard</h1>
+
         <!-- Events Modal -->
         <div class="modal-overlay" id="events-modal-overlay">
             <div class="modal">
@@ -14,13 +15,10 @@
                     <button class="modal-close" id="events-modal-close">✕</button>
                 </div>
                 <div class="modal-body">
-                    <!-- Existing Events -->
                     <div>
                         <div class="modal-section-title">Events</div>
                         <div class="modal-event-list" id="modal-event-list"></div>
                     </div>
-
-                    <!-- New Event Form -->
                     <div>
                         <div class="modal-section-title">New Event</div>
                         <div class="modal-field">
@@ -47,6 +45,7 @@
                 </div>
             </div>
         </div>
+
         <!-- Rounds Modal -->
         <div class="modal-overlay" id="rounds-modal-overlay">
             <div class="modal">
@@ -60,7 +59,7 @@
                         <div class="round-list" id="round-list"></div>
                     </div>
                     <div class="round-add-row">
-                        <input type="text" id="new-round-input" placeholder="Add round... e.g. Winners Finals">
+                        <input type="text" id="new-round-input" placeholder="Add round...">
                         <button class="btn-primary" id="add-round-btn">Add</button>
                     </div>
                     <div>
@@ -75,20 +74,29 @@
                 </div>
             </div>
         </div>
+
         <!-- Match Controls -->
         <div class="match-controls">
             <div class="control-group">
                 <label>Event</label>
                 <div style="display:flex;gap:6px;align-items:center">
                     <select id="event-select" style="flex:1"></select>
-                    <button id="edit-events-btn" class="btn-ghost" style="padding:0 10px;height:36px;font-size:16px;flex-shrink:0" title="Manage Events">✎</button>
+                    <button id="edit-events-btn" class="btn-ghost" style="padding:0 10px;height:36px;font-size:16px;flex-shrink:0">✎</button>
                 </div>
             </div>
             <div class="control-group grow">
                 <label>Round</label>
                 <div style="display:flex;gap:6px;align-items:center">
                     <select id="round-select" style="flex:1"></select>
-                    <button id="edit-rounds-btn" class="btn-ghost" style="padding:0 10px;height:36px;font-size:16px;flex-shrink:0" title="Manage Rounds">✎</button>
+                    <button id="edit-rounds-btn" class="btn-ghost" style="padding:0 10px;height:36px;font-size:16px;flex-shrink:0">✎</button>
+                </div>
+            </div>
+            <div class="control-group">
+                <label>Mode</label>
+                <div class="mode-toggle">
+                    <button class="mode-btn active" data-mode="singles">Singles</button>
+                    <button class="mode-btn" data-mode="doubles">Doubles</button>
+                    <button class="mode-btn" data-mode="ffa">FFA</button>
                 </div>
             </div>
             <div class="match-actions">
@@ -97,21 +105,31 @@
                 <button id="end-set-btn" style="display:none">End Set</button>
             </div>
         </div>
-        
+
+        <!-- FFA player count toggle (only visible in FFA mode) -->
+        <div id="ffa-controls" style="display:none">
+            <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--on-surface-dim)">Players</label>
+            <div class="mode-toggle" style="margin-top:4px">
+                <button class="ffa-count-btn active" data-count="3">3 Players</button>
+                <button class="ffa-count-btn" data-count="4">4 Players</button>
+            </div>
+        </div>
+
+        <!-- Player card template (singles/ffa) -->
         <template id="player-card-template">
             <div class="card">
                 <div class="card-header">
                     <h2 class="card-title">Player</h2>
-                    <div class="player-input-wrapper" style="display:none; flex:1;">
+                    <div class="player-input-wrapper" style="display:none;flex:1">
                         <input type="text" class="player-ghost" disabled-tabindex="-1">
                         <input type="text" class="player-input" placeholder="Player Name...">
                     </div>
                     <div class="autocomplete-results"></div>
-                    <button class="save-player-btn" style="display:none;" title="Save Player">💾</button>
+                    <button class="save-player-btn" style="display:none" title="Save Player">💾</button>
                 </div>
                 <div class="char-image-container">
                     <div class="char-image-placeholder">?</div>
-                    <img class="char-image" src="" style="display: none;">
+                    <img class="char-image" src="" style="display:none">
                 </div>
                 <div class="card-body">
                     <select class="char-select"></select>
@@ -126,7 +144,9 @@
             </div>
         </template>
 
-        <div id="player-cards-container"></div>
+        <!-- Dynamic card area -->
+        <div id="match-area"></div>
     </div>
+
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 {% endblock %}
