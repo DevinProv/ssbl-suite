@@ -410,3 +410,23 @@
     height: 60px;
     background: linear-gradient(to bottom, transparent, var(--outline), transparent);
 }
+
+/* Undo Game Button */
+#undo-game-btn {
+    background-color: transparent;
+    color: var(--on-surface-dim);
+    border: 1px solid var(--outline);
+    padding: 0 16px;
+    height: 36px;
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+
+#undo-game-btn:hover {
+    background-color: var(--surface-2);
+    color: var(--on-surface);
+    border-color: var(--outline-bright);
+}

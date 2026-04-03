@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Events{% endblock %}
+{% block styles %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/events_mgmt.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modal.css') }}">
+{% endblock %}
+{% block content %}
+<h1>Events</h1>
+
+<div class="events-layout">
+
+    <!-- Left: Event List -->
+    <div class="events-left">
+        <div style="display:flex;gap:6px">
+            <button class="add-player-btn" id="new-event-btn" style="flex:1">+ New Event</button>
+            <button class="add-player-btn" id="import-url-btn" style="flex:1;border-color:var(--primary);color:var(--primary)">↓ Import</button>
+        </div>
+        <div class="events-list" id="events-list"></div>
+    </div>
+
+    <!-- Right: Detail + Tabs -->
+    <div class="events-right" id="events-right">
+        <div class="events-placeholder">
+            <div class="events-placeholder-icon">📅</div>
+            <p>Select an event or create a new one</p>
+        </div>
+    </div>
+</div>
+
+<!-- Import from URL Modal -->
+<div class="modal-overlay" id="import-modal-overlay">
+    <div class="modal" style="width:680px;max-width:calc(100vw - 48px)">
+        <div class="modal-header">
+            <span class="modal-title">Import from URL</span>
+            <button class="modal-close" id="import-modal-close">✕</button>
+        </div>
+        <div class="modal-body" id="import-modal-body">
+            <!-- Step 1: URL input -->
+            <div id="import-step-url">
+                <p style="font-size:12px;color:var(--on-surface-dim);line-height:1.6;margin-bottom:4px">
+                    Paste a <strong style="color:var(--on-surface)">Challonge</strong> or <strong style="color:var(--on-surface)">start.gg</strong> tournament URL.
+                    start.gg imports require an API key saved in Settings.
+                </p>
+                <div class="challonge-url-row" style="margin-top:8px">
+                    <input type="text" id="import-url-input" placeholder="https://start.gg/tournament/... or https://challonge.com/...">
+                    <button class="btn-primary" id="import-preview-btn">Preview</button>
+                </div>
+                <div id="import-source-badge" style="margin-top:8px;font-size:11px;color:var(--on-surface-dim)"></div>
+            </div>
+
+            <!-- Step 2: Preview (injected here) -->
+            <div id="import-step-preview" style="display:none"></div>
+        </div>
+        <div class="modal-footer" id="import-modal-footer">
+            <button class="btn-ghost" id="import-modal-cancel">Cancel</button>
+            <button class="btn-primary" id="import-do-btn" style="display:none">Import All Events</button>
+        </div>
+    </div>
+</div>
+
+<!-- Player Resolution Modal -->
+<div class="modal-overlay" id="resolution-modal-overlay">
+    <div class="modal" style="width:600px;max-width:calc(100vw - 48px)">
+        <div class="modal-header">
+            <span class="modal-title">Unmatched Players</span>
+            <button class="modal-close" id="resolution-modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:12px;color:var(--on-surface-dim);margin-bottom:4px">
+                These names weren't found in your player database. Choose what to do with each.
+            </p>
+            <div class="resolution-player-list" id="resolution-player-list"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-ghost" id="resolution-cancel-btn">Cancel</button>
+            <button class="btn-primary" id="resolution-confirm-btn">Import Matches</button>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/events_mgmt.js') }}"></script>
+{% endblock %}

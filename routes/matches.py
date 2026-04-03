@@ -104,3 +104,33 @@ def create_game(set_id):
     db.session.add(game)
     db.session.commit()
     return jsonify(serialize_game(game)), 201
+
+# Delete Game
+@sets_bp.route("/sets/<int:set_id>/games/<int:game_id>", methods=["DELETE"])
+def delete_game(set_id, game_id):
+    game = Game.query.get(game_id)
+    if game is None or game.setID != set_id:
+        return jsonify({"error": "Game not found"}), 404
+    db.session.delete(game)
+    db.session.commit()
+
+    match_set = MatchSet.query.get(set_id)
+    if match_set and len(match_set.games) == 0:
+        db.session.delete(match_set)
+        db.session.commit()
+        return jsonify({"ok": True, "setDeleted": True})
+    return jsonify({"ok": True})
+
+@sets_bp.route("/sets/<int:set_id>/games/last", methods=["DELETE"])
+def delete_last_game(set_id):
+    """Delete the most recent game in a set — used by undo."""
+    match_set = MatchSet.query.get(set_id)
+    if match_set is None:
+        return jsonify({"error": "Set not found"}), 404
+    if not match_set.games:
+        return jsonify({"error": "No games to undo"}), 400
+    last_game = max(match_set.games, key=lambda g: g.gameNumber)
+    winner_id = last_game.winnerID
+    db.session.delete(last_game)
+    db.session.commit()
+    return jsonify({"ok": True, "winnerID": winner_id})

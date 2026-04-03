@@ -1,0 +1,332 @@
+/* =====================
+   Modal Base
+   ===================== */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+}
+
+.modal-overlay.open {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.modal {
+    background: var(--surface);
+    border: 1px solid var(--outline);
+    border-radius: 16px;
+    width: 520px;
+    max-width: calc(100vw - 48px);
+    max-height: calc(100vh - 48px);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+    transform: translateY(12px);
+    transition: transform 0.2s;
+    overflow: hidden;
+}
+
+.modal-overlay.open .modal {
+    transform: translateY(0);
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--outline);
+    flex-shrink: 0;
+}
+
+.modal-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: var(--on-surface);
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    color: var(--on-surface-dim);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background 0.12s, color 0.12s;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    background: var(--surface-2);
+    color: var(--on-surface);
+}
+
+.modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.modal-footer {
+    padding: 14px 20px;
+    border-top: 1px solid var(--outline);
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    flex-shrink: 0;
+}
+
+/* =====================
+   Modal Form Fields
+   ===================== */
+.modal-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.modal-field label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--on-surface-dim);
+}
+
+.modal-field input,
+.modal-field select {
+    background: var(--surface-2);
+    border: 1px solid var(--outline);
+    border-radius: 8px;
+    color: var(--on-surface);
+    padding: 8px 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    outline: none;
+    width: 100%;
+    transition: border-color 0.15s;
+}
+
+.modal-field input:focus,
+.modal-field select:focus {
+    border-color: var(--primary);
+}
+
+.modal-section-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--primary);
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--outline);
+}
+
+/* =====================
+   Events List in Modal
+   ===================== */
+.modal-event-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.modal-event-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--outline);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.12s;
+}
+
+.modal-event-item:hover {
+    border-color: var(--outline-bright);
+}
+
+.modal-event-item.selected {
+    border-color: var(--primary);
+}
+
+.modal-event-title {
+    flex: 1;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--on-surface);
+}
+
+.modal-event-date {
+    font-size: 11px;
+    color: var(--on-surface-dim);
+}
+
+.modal-event-delete {
+    background: transparent;
+    border: none;
+    color: var(--on-surface-dim);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: color 0.12s, background 0.12s;
+}
+
+.modal-event-delete:hover {
+    color: var(--danger);
+    background: rgba(224, 92, 92, 0.1);
+}
+
+/* =====================
+   Round List in Modal
+   ===================== */
+.round-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.round-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--outline);
+    border-radius: 8px;
+}
+
+.round-drag-handle {
+    color: var(--on-surface-dim);
+    cursor: grab;
+    font-size: 14px;
+    flex-shrink: 0;
+    padding: 0 2px;
+}
+
+.round-drag-handle:active {
+    cursor: grabbing;
+}
+
+.round-item-name {
+    flex: 1;
+    font-size: 13px;
+    color: var(--on-surface);
+}
+
+.round-item-delete {
+    background: transparent;
+    border: none;
+    color: var(--on-surface-dim);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: color 0.12s;
+    flex-shrink: 0;
+}
+
+.round-item-delete:hover {
+    color: var(--danger);
+}
+
+.round-add-row {
+    display: flex;
+    gap: 8px;
+}
+
+.round-add-row input {
+    flex: 1;
+    background: var(--surface-2);
+    border: 1px solid var(--outline);
+    border-radius: 8px;
+    color: var(--on-surface);
+    padding: 8px 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.round-add-row input:focus {
+    border-color: var(--primary);
+}
+
+/* =====================
+   Template Picker
+   ===================== */
+.template-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.template-item {
+    padding: 10px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--outline);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.12s, background 0.12s;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.template-item:hover {
+    border-color: var(--primary);
+    background: var(--surface-3);
+}
+
+.template-item-name {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--on-surface);
+}
+
+.template-item-count {
+    font-size: 11px;
+    color: var(--on-surface-dim);
+    flex-shrink: 0;
+}
+
+.template-item-delete {
+    background: transparent;
+    border: none;
+    color: var(--on-surface-dim);
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-size: 12px;
+    flex-shrink: 0;
+    transition: color 0.12s;
+}
+
+.template-item-delete:hover {
+    color: var(--danger);
+}

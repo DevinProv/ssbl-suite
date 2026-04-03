@@ -1,0 +1,308 @@
+/* =====================
+   Video Page Layout
+   ===================== */
+.video-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.video-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.video-toolbar-right {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* =====================
+   Config Bar
+   ===================== */
+.video-config-bar {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    background: var(--surface);
+    border: 1px solid var(--outline);
+    border-radius: 12px;
+    padding: 14px 16px;
+    flex-wrap: wrap;
+}
+
+.video-config-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1;
+    min-width: 200px;
+}
+
+.video-config-field label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--on-surface-dim);
+}
+
+.video-config-field input {
+    background: var(--surface-2);
+    border: 1px solid var(--outline);
+    border-radius: 8px;
+    color: var(--on-surface);
+    padding: 8px 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.video-config-field input:focus {
+    border-color: var(--primary);
+}
+
+.token-hints {
+    font-size: 10px;
+    color: var(--on-surface-dim);
+    margin-top: 2px;
+}
+
+/* =====================
+   YouTube Auth Bar
+   ===================== */
+.yt-auth-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    background: var(--surface);
+    border: 1px solid var(--outline);
+    border-radius: 10px;
+}
+
+.yt-auth-bar .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--outline-bright);
+    flex-shrink: 0;
+}
+.yt-auth-bar .status-dot.connected { background: var(--success); box-shadow: 0 0 6px rgba(92,184,92,0.5); }
+
+.yt-auth-label {
+    font-size: 12px;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--on-surface-dim);
+    flex: 1;
+}
+
+/* =====================
+   VOD Groups
+   ===================== */
+.vod-group {
+    background: var(--surface);
+    border: 1px solid var(--outline);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.vod-group-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--outline);
+    background: var(--surface-2);
+}
+
+.vod-filename {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--on-surface);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vod-set-count {
+    font-size: 11px;
+    color: var(--on-surface-dim);
+    flex-shrink: 0;
+}
+
+.vod-group-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+/* =====================
+   Set Rows
+   ===================== */
+.set-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--outline);
+    transition: background 0.1s;
+}
+
+.set-row:last-child {
+    border-bottom: none;
+}
+
+.set-row:hover {
+    background: var(--surface-2);
+}
+
+.set-row-check {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.set-row-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.set-row-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--on-surface);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.set-row-title input {
+    background: var(--surface-2);
+    border: 1px solid var(--outline);
+    border-radius: 6px;
+    color: var(--on-surface);
+    padding: 4px 8px;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    outline: none;
+    width: 100%;
+    transition: border-color 0.15s;
+}
+
+.set-row-title input:focus {
+    border-color: var(--primary);
+}
+
+.set-row-meta {
+    font-size: 11px;
+    color: var(--on-surface-dim);
+    margin-top: 2px;
+    display: flex;
+    gap: 8px;
+}
+
+.set-row-timestamps {
+    font-family: monospace;
+    font-size: 10px;
+    color: var(--on-surface-dim);
+    flex-shrink: 0;
+    text-align: right;
+    line-height: 1.6;
+}
+
+.set-row-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+    align-items: center;
+}
+
+/* =====================
+   Clip Status Badge
+   ===================== */
+.clip-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+}
+
+.clip-badge.none      { background: var(--surface-3); color: var(--on-surface-dim); }
+.clip-badge.cutting   { background: rgba(224,160,80,0.15); color: var(--warning); border: 1px solid var(--warning); }
+.clip-badge.cut       { background: rgba(79,195,212,0.15); color: var(--primary); border: 1px solid var(--primary); }
+.clip-badge.uploading { background: rgba(224,160,80,0.15); color: var(--warning); border: 1px solid var(--warning); }
+.clip-badge.uploaded  { background: rgba(92,184,92,0.15); color: var(--success); border: 1px solid var(--success); }
+.clip-badge.failed    { background: rgba(224,92,92,0.15); color: var(--danger); border: 1px solid var(--danger); }
+
+/* =====================
+   Empty State
+   ===================== */
+.video-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 60px 24px;
+    color: var(--on-surface-dim);
+    text-align: center;
+}
+
+.video-empty-icon {
+    font-size: 48px;
+    opacity: 0.3;
+}
+
+.video-empty p {
+    font-size: 13px;
+    line-height: 1.6;
+    max-width: 320px;
+}
+
+/* =====================
+   Bulk Select Bar
+   ===================== */
+.bulk-bar {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: var(--primary-dim);
+    border: 1px solid var(--primary);
+    border-radius: 10px;
+    font-size: 12px;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    color: var(--on-surface);
+}
+
+.bulk-bar.visible {
+    display: flex;
+}
+
+.bulk-count {
+    flex: 1;
+}

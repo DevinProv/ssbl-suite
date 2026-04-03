@@ -5,3 +5,5 @@ from .characters import characters_bp
 from .obs import obs_bp
 from .overlay import overlay_bp
 from .settings import settings_bp
+from .video import video_bp
+from .events_mgmt import events_mgmt_bp

@@ -1,0 +1,626 @@
+from flask import Blueprint, jsonify, request
+from database import db
+from models import Event, Player, MatchSet, RoundTemplate
+from sqlalchemy.orm.attributes import flag_modified
+import json
+import os
+import re
+import urllib.request
+import urllib.parse
+import urllib.error
+
+events_mgmt_bp = Blueprint("events_mgmt", __name__)
+
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+ROUND_MAP_PATH = os.path.join(BASE_DIR, "static", "round_mapping.json")
+STARTGG_CONFIG_PATH = os.path.join(BASE_DIR, "static", "startgg_config.json")
+
+DEFAULT_ROUND_MAP = {
+    "Grand Final": "Grand Finals",
+    "Grand Finals": "Grand Finals",
+    "Winners Final": "Winners Finals",
+    "Winners Semi-Final": "Semis",
+    "Winners Quarter-Final": "Quarters",
+    "Losers Final": "Losers Finals",
+    "Losers Semi-Final": "Losers Semis",
+    "Losers Quarter-Final": "Losers Quarters",
+    "Losers Round 1": "Losers Round 1",
+    "Losers Round 2": "Losers Round 2",
+}
+
+# =====================
+# Config helpers
+# =====================
+def load_round_map():
+    if os.path.exists(ROUND_MAP_PATH):
+        with open(ROUND_MAP_PATH) as f:
+            return json.load(f)
+    return DEFAULT_ROUND_MAP.copy()
+
+def save_round_map(data):
+    with open(ROUND_MAP_PATH, "w") as f:
+        json.dump(data, f, indent=2)
+
+def load_startgg_config():
+    if os.path.exists(STARTGG_CONFIG_PATH):
+        with open(STARTGG_CONFIG_PATH) as f:
+            return json.load(f)
+    return {"api_key": ""}
+
+def save_startgg_config(data):
+    with open(STARTGG_CONFIG_PATH, "w") as f:
+        json.dump(data, f, indent=2)
+
+# =====================
+# Round Mapping routes
+# =====================
+@events_mgmt_bp.route("/events/round-map", methods=["GET"])
+def get_round_map():
+    return jsonify(load_round_map())
+
+@events_mgmt_bp.route("/events/round-map", methods=["POST"])
+def set_round_map():
+    data = request.get_json()
+    save_round_map(data)
+    return jsonify({"ok": True})
+
+# =====================
+# start.gg config routes
+# =====================
+@events_mgmt_bp.route("/startgg/config", methods=["GET"])
+def get_startgg_config():
+    cfg = load_startgg_config()
+    # Mask key for display
+    key = cfg.get("api_key", "")
+    return jsonify({"api_key": key, "has_key": bool(key)})
+
+@events_mgmt_bp.route("/startgg/config", methods=["POST"])
+def save_startgg_config_route():
+    data = request.get_json()
+    save_startgg_config({"api_key": data.get("api_key", "")})
+    return jsonify({"ok": True})
+
+# =====================
+# Shared helpers
+# =====================
+def translate_round(raw_name, round_map):
+    return round_map.get(raw_name, raw_name)
+
+def find_player_by_name_or_alias(name):
+    name_lower = name.lower().strip()
+    players = Player.query.all()
+    for p in players:
+        if p.name.lower().strip() == name_lower:
+            return p
+        aliases = p.aliases or []
+        if any(a.lower().strip() == name_lower for a in aliases):
+            return p
+    return None
+
+def detect_source(url):
+    url = url.strip()
+    if "start.gg" in url or "smash.gg" in url:
+        return "startgg"
+    if "challonge.com" in url:
+        return "challonge"
+    return None
+
+# =====================
+# Challonge helpers
+# =====================
+def parse_challonge_url(url):
+    url = url.strip().rstrip("/")
+    m = re.match(r"https?://([^.]+)\.challonge\.com/(?:tournaments/)?([^/?]+)", url)
+    if m:
+        subdomain, slug = m.group(1), m.group(2)
+        if subdomain != "www":
+            return f"{subdomain}-{slug}", f"https://{subdomain}.challonge.com/{slug}.json"
+    m = re.match(r"https?://(?:www\.)?challonge\.com/(?:tournaments/)?([^/?]+)", url)
+    if m:
+        slug = m.group(1)
+        return slug, f"https://challonge.com/{slug}.json"
+    return None, None
+
+def fetch_challonge(json_url):
+    try:
+        req = urllib.request.Request(
+            json_url + "?include_participants=1&include_matches=1",
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        return {"error": f"HTTP {e.code} — bracket may be private or invalid."}
+    except Exception as e:
+        return {"error": str(e)}
+
+def derive_round_name(round_num, max_winners, max_losers):
+    if round_num == 0:
+        return "Grand Finals"
+    if round_num > 0:
+        from_end = max_winners - round_num
+        if from_end == 0: return "Winners Finals"
+        if from_end == 1: return "Semis"
+        if from_end == 2: return "Quarters"
+        if from_end == 3: return "Round of 16"
+        return f"Winners Round {round_num}"
+    else:
+        from_end = abs(max_losers) - abs(round_num)
+        if from_end == 0: return "Losers Finals"
+        if from_end == 1: return "Losers Semis"
+        if from_end == 2: return "Losers Quarters"
+        return f"Losers Round {abs(round_num)}"
+
+def build_challonge_preview(url):
+    slug, json_url = parse_challonge_url(url)
+    if not slug:
+        return {"error": "Invalid Challonge URL"}
+
+    bracket = fetch_challonge(json_url)
+    if "error" in bracket:
+        return {"error": f"Failed to fetch bracket: {bracket['error']}"}
+
+    tournament = bracket.get("tournament", {})
+    raw_matches = [m["match"] for m in tournament.get("matches", [])]
+    for round_matches in tournament.get("matches_by_round", {}).values():
+        raw_matches.extend(round_matches)
+    for group in bracket.get("groups", []):
+        for round_matches in group.get("matches_by_round", {}).values():
+            raw_matches.extend(round_matches)
+
+    matches = [m for m in raw_matches if m.get("player1") and m.get("player2")]
+    if not matches:
+        return {"error": "No completed matches found in this bracket."}
+
+    participants = {p["participant"]["id"]: p["participant"] for p in tournament.get("participants", [])}
+    winner_rounds = [m["round"] for m in matches if m.get("round", 0) > 0]
+    loser_rounds = [m["round"] for m in matches if m.get("round", 0) < 0]
+    max_winners = max(winner_rounds) if winner_rounds else 1
+    max_losers = min(loser_rounds) if loser_rounds else -1
+    round_map = load_round_map()
+
+    preview_matches = []
+    unmatched_names = set()
+
+    for m in matches:
+        p1_data = m.get("player1", {})
+        p2_data = m.get("player2", {})
+        p1_id = p1_data.get("id") or m.get("player1_id")
+        p2_id = p2_data.get("id") or m.get("player2_id")
+        winner_id = m.get("winner_id")
+
+        p1_name = p1_data.get("display_name") or participants.get(p1_id, {}).get("display_name", "Unknown")
+        p2_name = p2_data.get("display_name") or participants.get(p2_id, {}).get("display_name", "Unknown")
+
+        winner_name = None
+        if winner_id:
+            if winner_id == p1_id: winner_name = p1_name
+            elif winner_id == p2_id: winner_name = p2_name
+            else: winner_name = participants.get(winner_id, {}).get("display_name")
+
+        raw_round = derive_round_name(m.get("round", 1), max_winners, max_losers)
+        if m.get("is_group_match"):
+            raw_round = f"Pools {raw_round}"
+        translated_round = translate_round(raw_round, round_map)
+
+        p1_db = find_player_by_name_or_alias(p1_name)
+        p2_db = find_player_by_name_or_alias(p2_name)
+        if not p1_db: unmatched_names.add(p1_name)
+        if not p2_db: unmatched_names.add(p2_name)
+
+        preview_matches.append({
+            "round": translated_round,
+            "p1_name": p1_name,
+            "p2_name": p2_name,
+            "winner_name": winner_name,
+            "p1_found": p1_db is not None,
+            "p2_found": p2_db is not None,
+            "p1_db_id": p1_db.id if p1_db else None,
+            "p2_db_id": p2_db.id if p2_db else None,
+        })
+
+    tournament_title = tournament.get("name", slug)
+    unique_rounds = list(dict.fromkeys(m["round"] for m in preview_matches))
+    existing_event = Event.query.filter_by(bracketSlug=slug).first()
+
+    # Challonge is always one event
+    return {
+        "source": "challonge",
+        "slug": slug,
+        "url": url,
+        "sub_events": [{
+            "title": tournament_title,
+            "slug": slug,
+            "matches": preview_matches,
+            "unique_rounds": unique_rounds,
+            "existing_event": {"id": existing_event.id, "title": existing_event.eventTitle} if existing_event else None,
+        }],
+        "unmatched_names": list(unmatched_names),
+        "total_matches": len(preview_matches),
+    }
+
+# =====================
+# start.gg helpers
+# =====================
+def parse_startgg_url(url):
+    """Extract tournament slug from a start.gg URL."""
+    url = url.strip().rstrip("/")
+    # https://www.start.gg/tournament/my-tournament/...
+    m = re.match(r"https?://(?:www\.)?(?:start|smash)\.gg/tournament/([^/?#]+)", url)
+    if m:
+        return m.group(1)
+    return None
+
+def startgg_query(query, variables, api_key):
+    """Execute a GraphQL query against the start.gg API."""
+    endpoint = "https://api.start.gg/gql/alpha"
+    payload = json.dumps({"query": query, "variables": variables}).encode("utf-8")
+    req = urllib.request.Request(
+        endpoint,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+            "User-Agent": "SSBL-App/1.0"
+        },
+        method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8")
+        return {"errors": [{"message": f"HTTP {e.code}: {body[:200]}"}]}
+    except Exception as e:
+        return {"errors": [{"message": str(e)}]}
+
+TOURNAMENT_EVENTS_QUERY = """
+query TournamentEvents($slug: String!) {
+  tournament(slug: $slug) {
+    id
+    name
+    events {
+      id
+      name
+      slug
+      numEntrants
+    }
+  }
+}
+"""
+
+EVENT_SETS_QUERY = """
+query EventSets($eventId: ID!, $page: Int!, $perPage: Int!) {
+  event(id: $eventId) {
+    sets(page: $page, perPage: $perPage, filters: { state: 3 }) {
+      pageInfo { total totalPages }
+      nodes {
+        id
+        fullRoundText
+        winnerId
+        slots {
+          entrant {
+            id
+            name
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+def fetch_startgg_sets(event_id, api_key):
+    """Fetch all completed sets for a start.gg event, paginating as needed."""
+    all_sets = []
+    page = 1
+    per_page = 50
+
+    while True:
+        result = startgg_query(EVENT_SETS_QUERY, {
+            "eventId": event_id,
+            "page": page,
+            "perPage": per_page
+        }, api_key)
+
+        if "errors" in result:
+            return None, result["errors"][0]["message"]
+
+        sets_data = result.get("data", {}).get("event", {}).get("sets", {})
+        nodes = sets_data.get("nodes", [])
+        total_pages = sets_data.get("pageInfo", {}).get("totalPages", 1)
+
+        for s in nodes:
+            slots = s.get("slots", [])
+            if len(slots) < 2:
+                continue
+            p1_entrant = slots[0].get("entrant")
+            p2_entrant = slots[1].get("entrant")
+            if not p1_entrant or not p2_entrant:
+                continue
+            all_sets.append({
+                "id": s["id"],
+                "round": s.get("fullRoundText") or "Unknown Round",
+                "p1_name": p1_entrant["name"],
+                "p2_name": p2_entrant["name"],
+                "p1_id": p1_entrant["id"],
+                "p2_id": p2_entrant["id"],
+                "winner_id": s.get("winnerId"),
+            })
+
+        if page >= total_pages:
+            break
+        page += 1
+
+    return all_sets, None
+
+def build_startgg_preview(url, api_key):
+    if not api_key:
+        return {"error": "No start.gg API key configured. Add it in Settings."}
+
+    slug = parse_startgg_url(url)
+    if not slug:
+        return {"error": "Invalid start.gg URL. Expected format: start.gg/tournament/your-tournament"}
+
+    # Fetch all events in tournament
+    result = startgg_query(TOURNAMENT_EVENTS_QUERY, {"slug": slug}, api_key)
+    if "errors" in result:
+        return {"error": f"start.gg API error: {result['errors'][0]['message']}"}
+
+    tournament_data = result.get("data", {}).get("tournament")
+    if not tournament_data:
+        return {"error": "Tournament not found. Check the URL and make sure it's public."}
+
+    tournament_name = tournament_data["name"]
+    events = tournament_data.get("events", [])
+    if not events:
+        return {"error": "No events found in this tournament."}
+
+    round_map = load_round_map()
+    sub_events = []
+    all_unmatched = set()
+    total_matches = 0
+
+    for event in events:
+        event_id = event["id"]
+        event_name = event["name"]
+        compound_title = f"{tournament_name} - {event_name}"
+        event_slug = event.get("slug", "")
+
+        sets, error = fetch_startgg_sets(event_id, api_key)
+        if error:
+            # Skip events we can't fetch rather than failing the whole import
+            continue
+        if not sets:
+            continue
+
+        preview_matches = []
+        unmatched_names = set()
+
+        for s in sets:
+            p1_name = s["p1_name"]
+            p2_name = s["p2_name"]
+            winner_id = s["winner_id"]
+
+            # Determine winner name
+            winner_name = None
+            if winner_id:
+                if winner_id == s["p1_id"]: winner_name = p1_name
+                elif winner_id == s["p2_id"]: winner_name = p2_name
+
+            translated_round = translate_round(s["round"], round_map)
+
+            p1_db = find_player_by_name_or_alias(p1_name)
+            p2_db = find_player_by_name_or_alias(p2_name)
+            if not p1_db: unmatched_names.add(p1_name)
+            if not p2_db: unmatched_names.add(p2_name)
+            all_unmatched.update(unmatched_names)
+
+            preview_matches.append({
+                "round": translated_round,
+                "p1_name": p1_name,
+                "p2_name": p2_name,
+                "winner_name": winner_name,
+                "p1_found": p1_db is not None,
+                "p2_found": p2_db is not None,
+                "p1_db_id": p1_db.id if p1_db else None,
+                "p2_db_id": p2_db.id if p2_db else None,
+            })
+
+        unique_rounds = list(dict.fromkeys(m["round"] for m in preview_matches))
+        existing_event = Event.query.filter_by(bracketSlug=event_slug).first()
+        total_matches += len(preview_matches)
+
+        sub_events.append({
+            "title": compound_title,
+            "slug": event_slug,
+            "event_id": event_id,
+            "matches": preview_matches,
+            "unique_rounds": unique_rounds,
+            "existing_event": {"id": existing_event.id, "title": existing_event.eventTitle} if existing_event else None,
+        })
+
+    if not sub_events:
+        return {"error": "No completed sets found in any event of this tournament."}
+
+    return {
+        "source": "startgg",
+        "slug": slug,
+        "url": url,
+        "tournament_name": tournament_name,
+        "sub_events": sub_events,
+        "unmatched_names": list(all_unmatched),
+        "total_matches": total_matches,
+    }
+
+# =====================
+# Preview route (unified)
+# =====================
+@events_mgmt_bp.route("/events/import/preview", methods=["POST"])
+def import_preview():
+    data = request.get_json()
+    url = data.get("url", "").strip()
+    if not url:
+        return jsonify({"error": "URL required"}), 400
+
+    source = detect_source(url)
+    if not source:
+        return jsonify({"error": "Unrecognized URL. Paste a Challonge or start.gg tournament link."}), 400
+
+    if source == "challonge":
+        result = build_challonge_preview(url)
+    else:
+        cfg = load_startgg_config()
+        result = build_startgg_preview(url, cfg.get("api_key", ""))
+
+    if "error" in result:
+        return jsonify(result), 400
+
+    return jsonify(result)
+
+# =====================
+# Import route (unified)
+# =====================
+@events_mgmt_bp.route("/events/import/execute", methods=["POST"])
+def import_execute():
+    """
+    Import one or more sub_events from a preview result.
+    Each sub_event becomes its own Event record.
+    resolutions: {challonge_name: {action: "create"|"merge", player_id: int, name: str}}
+    """
+    data = request.get_json()
+    sub_events = data.get("sub_events", [])
+    resolutions = data.get("resolutions", {})
+    reimport = data.get("reimport", False)
+
+    if not sub_events:
+        return jsonify({"error": "No sub_events to import"}), 400
+
+    # Resolve players once for all sub_events
+    player_cache = {}
+
+    for name, res in resolutions.items():
+        if res["action"] == "create":
+            player = Player(name=res.get("name", name), defaultChar=None, defaultCharColor=None, aliases=[name])
+            db.session.add(player)
+            db.session.flush()
+            player_cache[name] = player
+        elif res["action"] == "merge":
+            player = Player.query.get(res["player_id"])
+            if player:
+                aliases = player.aliases or []
+                if name not in aliases:
+                    aliases.append(name)
+                    player.aliases = aliases
+                    flag_modified(player, "aliases")
+                player_cache[name] = player
+
+    db.session.flush()
+
+    results = []
+
+    for sub in sub_events:
+        slug = sub.get("slug", "")
+        title = sub.get("title", slug)
+        matches = sub.get("matches", [])
+        unique_rounds = sub.get("unique_rounds", [])
+
+        # Check for existing event
+        existing = Event.query.filter_by(bracketSlug=slug).first() if slug else None
+
+        if existing and not reimport:
+            results.append({"title": title, "event_id": existing.id, "skipped": True, "reason": "already_imported"})
+            continue
+
+        if existing and reimport:
+            # Delete existing sets for this event
+            for s in MatchSet.query.filter_by(eventID=existing.id).all():
+                db.session.delete(s)
+            db.session.flush()
+            event = existing
+            event.eventTitle = title
+            event.rounds = unique_rounds
+            flag_modified(event, "rounds")
+        else:
+            event = Event(
+                eventTitle=title,
+                eventDate="",
+                bracketSlug=slug,
+                rounds=unique_rounds
+            )
+            db.session.add(event)
+            db.session.flush()
+
+        # Look up already-matched players
+        for m in matches:
+            for name in [m["p1_name"], m["p2_name"]]:
+                if name not in player_cache:
+                    p = find_player_by_name_or_alias(name)
+                    if p:
+                        player_cache[name] = p
+
+        imported = 0
+        skipped = 0
+
+        for m in matches:
+            p1 = player_cache.get(m["p1_name"])
+            p2 = player_cache.get(m["p2_name"])
+            winner = player_cache.get(m["winner_name"]) if m.get("winner_name") else None
+
+            if not p1 or not p2:
+                skipped += 1
+                continue
+
+            match_set = MatchSet(
+                eventID=event.id,
+                bracketRound=m["round"],
+                player1ID=p1.id,
+                player2ID=p2.id,
+                winnerID=winner.id if winner else None,
+            )
+            db.session.add(match_set)
+            imported += 1
+
+        results.append({
+            "title": title,
+            "event_id": event.id,
+            "imported": imported,
+            "skipped": skipped,
+            "skipped_event": False,
+        })
+
+    db.session.commit()
+
+    return jsonify({
+        "ok": True,
+        "results": results,
+        "total_imported": sum(r.get("imported", 0) for r in results),
+        "events_created": len([r for r in results if not r.get("skipped_event")]),
+    })
+
+# =====================
+# Legacy Challonge routes (keep for backwards compat)
+# =====================
+@events_mgmt_bp.route("/events/challonge/preview", methods=["POST"])
+def challonge_preview_legacy():
+    return import_preview()
+
+@events_mgmt_bp.route("/events/challonge/import", methods=["POST"])
+def challonge_import_legacy():
+    # Map old format to new format
+    data = request.get_json()
+    matches = data.get("matches", [])
+    new_data = {
+        "sub_events": [{
+            "slug": data.get("slug"),
+            "title": data.get("title"),
+            "matches": matches,
+            "unique_rounds": list(dict.fromkeys(m["round"] for m in matches)),
+        }],
+        "resolutions": data.get("resolutions", {}),
+        "reimport": data.get("reimport", False),
+    }
+    # Temporarily replace request data
+    from flask import g
+    g._import_data = new_data
+    return import_execute()

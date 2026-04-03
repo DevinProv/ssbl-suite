@@ -380,13 +380,6 @@
 .match-win .match-outcome-bar { background: var(--success); }
 .match-loss .match-outcome-bar { background: var(--danger); }
 
-.match-meta {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    padding-left: 8px;
-}
-
 .match-event {
     font-family: 'Rajdhani', sans-serif;
     font-size: 12px;
@@ -464,4 +457,157 @@
     object-fit: contain;
     background: var(--surface-3);
     flex-shrink: 0;
+}
+
+/* =====================
+   Match History Groups
+   ===================== */
+details.match-event-group {
+    border: 1px solid var(--outline);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+summary.match-event-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--surface-2);
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    gap: 12px;
+}
+
+summary.match-event-summary::-webkit-details-marker { display: none; }
+
+summary.match-event-summary::before {
+    content: '▶';
+    font-size: 9px;
+    color: var(--on-surface-dim);
+    transition: transform 0.15s;
+    flex-shrink: 0;
+}
+
+details[open] summary.match-event-summary::before {
+    transform: rotate(90deg);
+}
+
+.match-event-name {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--on-surface);
+    flex: 1;
+}
+
+.match-event-record {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--on-surface-dim);
+    flex-shrink: 0;
+}
+
+.record-pos { color: var(--success); }
+.record-neg { color: var(--danger); }
+
+.match-event-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+    background: var(--surface);
+}
+
+.match-round-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--on-surface-dim);
+    padding-left: 8px;
+    margin-bottom: 2px;
+}
+
+/* Remove match-meta since round is now match-round-label */
+.match-row {
+    margin-bottom: 0;
+}
+
+/* =====================
+   Game Rows within Match
+   ===================== */
+.game-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 8px 4px;
+    border-top: 1px solid var(--outline);
+    margin-top: 6px;
+}
+
+.game-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: var(--surface-3);
+    font-size: 11px;
+}
+
+.game-outcome {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    width: 16px;
+    flex-shrink: 0;
+}
+
+.game-win .game-outcome { color: var(--success); }
+.game-loss .game-outcome { color: var(--danger); }
+
+.game-chars {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+}
+
+.game-vs-label {
+    font-size: 9px;
+    color: var(--on-surface-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.game-num {
+    font-size: 10px;
+    color: var(--on-surface-dim);
+    flex-shrink: 0;
+}
+
+.game-delete-btn {
+    background: transparent;
+    border: none;
+    color: var(--on-surface-dim);
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-size: 11px;
+    flex-shrink: 0;
+    transition: color 0.12s, background 0.12s;
+    opacity: 0;
+}
+
+.game-row:hover .game-delete-btn {
+    opacity: 1;
+}
+
+.game-delete-btn:hover {
+    color: var(--danger);
+    background: rgba(224, 92, 92, 0.1);
 }

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Video{% endblock %}
+{% block styles %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/video.css') }}">
+{% endblock %}
+{% block content %}
+<h1>Video Export</h1>
+
+<div class="video-layout">
+
+    <!-- Config Bar -->
+    <div class="video-config-bar">
+        <div class="video-config-field" style="flex:2">
+            <label>Title Template</label>
+            <input type="text" id="title-template" placeholder="[Event] - [Round] - [P1] vs [P2]">
+            <div class="token-hints">Tokens: [Event] [Round] [P1] [P2]</div>
+        </div>
+        <div class="video-config-field">
+            <label>Output Subfolder</label>
+            <input type="text" id="output-subdir" placeholder="cutsets">
+        </div>
+        <button class="btn-primary" id="save-config-btn" style="align-self:flex-end">Save</button>
+    </div>
+
+    <!-- YouTube Auth Bar -->
+    <div class="yt-auth-bar">
+        <span class="status-dot" id="yt-dot"></span>
+        <span class="yt-auth-label" id="yt-label">Checking YouTube...</span>
+        <button class="btn-ghost" id="yt-auth-btn" style="display:none">Connect YouTube</button>
+        <button class="btn-ghost" id="yt-revoke-btn" style="display:none">Disconnect</button>
+        <span id="yt-creds-hint" style="display:none;font-size:11px;color:var(--on-surface-dim)">
+            Place <code>youtube_credentials.json</code> in <code>static/</code> to enable uploads
+        </span>
+    </div>
+
+    <!-- Bulk Action Bar -->
+    <div class="bulk-bar" id="bulk-bar">
+        <span class="bulk-count" id="bulk-count">0 selected</span>
+        <button class="btn-primary" id="bulk-cut-btn">✂ Cut Selected</button>
+        <button class="btn-primary" id="bulk-upload-btn">↑ Upload Selected</button>
+        <button class="btn-ghost" id="bulk-clear-btn">Clear</button>
+    </div>
+
+    <!-- VOD List -->
+    <div id="vod-list">
+        <div class="video-empty">
+            <div class="video-empty-icon">🎬</div>
+            <p>Loading VODs...</p>
+        </div>
+    </div>
+
+</div>
+
+<script src="{{ url_for('static', filename='js/video.js') }}"></script>
+{% endblock %}

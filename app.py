@@ -1,15 +1,20 @@
+import secrets
+
 from flask import Flask, render_template
 from flask_sock import Sock
 from database import db
-from routes import players_bp, events_bp, sets_bp, characters_bp, obs_bp, settings_bp
+from routes import players_bp, events_bp, sets_bp, characters_bp, obs_bp, settings_bp, video_bp, events_mgmt_bp
 from routes.overlay import overlay_bp, _connected_overlays, broadcast_state, broadcast_scene_change
 from config import get_active_theme, get_obs_config
 import json
+import os
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///ssbl.db"
 db.init_app(app)
 sock = Sock(app)
+app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+
 
 app.register_blueprint(players_bp, url_prefix="/api")
 app.register_blueprint(events_bp, url_prefix="/api")
@@ -18,6 +23,8 @@ app.register_blueprint(characters_bp, url_prefix="/api")
 app.register_blueprint(obs_bp, url_prefix="/api")
 app.register_blueprint(settings_bp, url_prefix="/api")
 app.register_blueprint(overlay_bp)
+app.register_blueprint(video_bp, url_prefix="/api")
+app.register_blueprint(events_mgmt_bp, url_prefix="/api")
 
 @app.context_processor
 def inject_theme():
@@ -38,6 +45,14 @@ def players_page():
 @app.route("/settings")
 def settings_page():
     return render_template("settings.html")
+
+@app.route("/video")
+def video_page():
+    return render_template("video.html")
+
+@app.route("/events")
+def events_page():
+    return render_template("events_mgmt.html")
 
 @sock.route("/ws/overlay")
 def overlay_ws(ws):

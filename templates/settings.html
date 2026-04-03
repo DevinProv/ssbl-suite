@@ -35,6 +35,32 @@
     </div>
 
     <div class="settings-card">
+        <h2>start.gg Integration</h2>
+        <p style="font-size:12px;color:var(--on-surface-dim);line-height:1.6">
+            Required to import brackets from start.gg. Generate a token at
+            <a href="https://www.start.gg/admin/profile/developer" target="_blank" style="color:var(--primary)">start.gg → Settings → Developer</a>.
+            The token is only shown once — save it somewhere safe.
+        </p>
+        <div class="settings-form">
+            <div class="field-group">
+                <label>API Key</label>
+                <div style="display:flex;gap:8px">
+                    <input type="password" id="startgg-api-key" placeholder="Paste your start.gg API token...">
+                    <button type="button" id="startgg-toggle-btn" class="btn-ghost" style="flex-shrink:0;padding:0 12px" title="Show/hide key">👁</button>
+                </div>
+            </div>
+            <div class="settings-status" id="startgg-status" style="display:none">
+                <span class="status-dot connected"></span>
+                <span>API key saved</span>
+            </div>
+            <div class="settings-actions">
+                <button id="startgg-save-btn" class="btn-primary">Save Key</button>
+                <button id="startgg-clear-btn" class="btn-danger">Clear</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-card">
         <h2>Theme</h2>
         <div class="field-group">
             <label>Active Theme</label>

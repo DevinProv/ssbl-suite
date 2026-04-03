@@ -8,6 +8,7 @@ class Player(db.Model):
     name: Mapped[str] = mapped_column(String, nullable=False)
     defaultChar: Mapped[str | None] = mapped_column(String, nullable=True)
     defaultCharColor: Mapped[str | None] = mapped_column(String, nullable=True)
+    aliases: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=list)
 
 class Event(db.Model):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -15,6 +16,7 @@ class Event(db.Model):
     eventDate: Mapped[str] = mapped_column(String, nullable=False)
     bracketLink: Mapped[str | None] = mapped_column(String, nullable=True)
     rounds: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=list)
+    bracketSlug: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
 class MatchSet(db.Model):
     __tablename__ = "match_set"
@@ -43,3 +45,12 @@ class RoundTemplate(db.Model):
     rounds: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     is_builtin: Mapped[bool] = mapped_column(db.Boolean, nullable=False, default=False)
 
+class ClipExport(db.Model):
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    setID: Mapped[int] = mapped_column(Integer, ForeignKey("match_set.id"), nullable=False, unique=True)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
+    # status values: pending, cutting, cut, uploading, uploaded, failed
+    output_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    title: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    youtube_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    youtube_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)

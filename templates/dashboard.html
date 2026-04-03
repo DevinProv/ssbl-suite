@@ -6,18 +6,95 @@
 {% block content %}
     <div class="container">
         <h1>Dashboard</h1>
+        <!-- Events Modal -->
+        <div class="modal-overlay" id="events-modal-overlay">
+            <div class="modal">
+                <div class="modal-header">
+                    <span class="modal-title">Manage Events</span>
+                    <button class="modal-close" id="events-modal-close">✕</button>
+                </div>
+                <div class="modal-body">
+                    <!-- Existing Events -->
+                    <div>
+                        <div class="modal-section-title">Events</div>
+                        <div class="modal-event-list" id="modal-event-list"></div>
+                    </div>
+
+                    <!-- New Event Form -->
+                    <div>
+                        <div class="modal-section-title">New Event</div>
+                        <div class="modal-field">
+                            <label>Title</label>
+                            <input type="text" id="new-event-title" placeholder="e.g. SSBL Monthly #12">
+                        </div>
+                        <div class="modal-field" style="margin-top:10px">
+                            <label>Date</label>
+                            <input type="date" id="new-event-date">
+                        </div>
+                        <div class="modal-field" style="margin-top:10px">
+                            <label>Bracket Link (optional)</label>
+                            <input type="text" id="new-event-bracket" placeholder="https://challonge.com/...">
+                        </div>
+                        <div style="margin-top:12px">
+                            <div class="modal-section-title" style="margin-bottom:8px">Round Template</div>
+                            <div class="template-grid" id="new-event-templates"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-ghost" id="events-modal-cancel">Cancel</button>
+                    <button class="btn-primary" id="create-event-btn">Create Event</button>
+                </div>
+            </div>
+        </div>
+        <!-- Rounds Modal -->
+        <div class="modal-overlay" id="rounds-modal-overlay">
+            <div class="modal">
+                <div class="modal-header">
+                    <span class="modal-title">Manage Rounds</span>
+                    <button class="modal-close" id="rounds-modal-close">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div>
+                        <div class="modal-section-title" id="rounds-modal-event-name">Rounds</div>
+                        <div class="round-list" id="round-list"></div>
+                    </div>
+                    <div class="round-add-row">
+                        <input type="text" id="new-round-input" placeholder="Add round... e.g. Winners Finals">
+                        <button class="btn-primary" id="add-round-btn">Add</button>
+                    </div>
+                    <div>
+                        <div class="modal-section-title" style="margin-bottom:8px">Load Template</div>
+                        <div class="template-grid" id="rounds-templates"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-ghost" id="save-as-template-btn">Save as Template</button>
+                    <button class="btn-ghost" id="rounds-modal-cancel">Cancel</button>
+                    <button class="btn-primary" id="save-rounds-btn">Save Rounds</button>
+                </div>
+            </div>
+        </div>
+        <!-- Match Controls -->
         <div class="match-controls">
             <div class="control-group">
                 <label>Event</label>
-                <select id="event-select"></select>
+                <div style="display:flex;gap:6px;align-items:center">
+                    <select id="event-select" style="flex:1"></select>
+                    <button id="edit-events-btn" class="btn-ghost" style="padding:0 10px;height:36px;font-size:16px;flex-shrink:0" title="Manage Events">✎</button>
+                </div>
             </div>
             <div class="control-group grow">
                 <label>Round</label>
-                <input type="text" id="round-input" placeholder="e.g. Winners Finals">
+                <div style="display:flex;gap:6px;align-items:center">
+                    <select id="round-select" style="flex:1"></select>
+                    <button id="edit-rounds-btn" class="btn-ghost" style="padding:0 10px;height:36px;font-size:16px;flex-shrink:0" title="Manage Rounds">✎</button>
+                </div>
             </div>
             <div class="match-actions">
+                <button id="undo-game-btn" style="display:none">↩ Undo</button>
                 <button id="start-set-btn">Start Set</button>
-                <button id="end-set-btn">End Set</button>
+                <button id="end-set-btn" style="display:none">End Set</button>
             </div>
         </div>
         

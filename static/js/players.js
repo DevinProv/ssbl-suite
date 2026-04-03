@@ -98,14 +98,13 @@ async function selectPlayer(player) {
     const losses = playerSets.length - wins;
     const winRate = playerSets.length > 0 ? Math.round((wins / playerSets.length) * 100) : 0;
 
-    renderMatchHistory(player, playerSets, playerMap, eventMap);
-    renderDetailPanel(player, { sets: playerSets.length, wins, losses, winRate });
+    renderDetailPanel(player, { sets: playerSets.length, wins, losses, winRate }, playerSets, playerMap, eventMap);
 }
 
 // =====================
 // Detail Panel
 // =====================
-async function renderDetailPanel(player, stats) {
+async function renderDetailPanel(player, stats, playerSets, playerMap, eventMap) {
     const right = document.getElementById("players-right");
 
     const avatarSrc = player.defaultChar && player.defaultCharColor
@@ -194,6 +193,7 @@ async function renderDetailPanel(player, stats) {
             </div>
         </div>
     `;
+    
 
     // Char change — reload colors
     document.getElementById("detail-char").addEventListener("change", async e => {
@@ -219,6 +219,7 @@ async function renderDetailPanel(player, stats) {
 
     document.getElementById("save-player-btn").addEventListener("click", () => savePlayer(player.id));
     document.getElementById("delete-player-btn").addEventListener("click", () => confirmDelete(player));
+    renderMatchHistory(player, playerSets, playerMap, eventMap);
 }
 
 function updateDetailAvatar(char, color) {
@@ -233,57 +234,136 @@ function updateDetailAvatar(char, color) {
 // Match History
 // =====================
 function renderMatchHistory(player, sets, playerMap, eventMap) {
-    if (sets.length === 0) return;
-
     const container = document.getElementById("match-history-card");
     if (!container) return;
 
-    const rows = sets.map(s => {
-        const isP1 = s.player1ID === player.id;
-        const opponent = playerMap[isP1 ? s.player2ID : s.player1ID];
-        const scores = getSetScores(s, s.player1ID, s.player2ID);
-        const myScore = isP1 ? scores.p1 : scores.p2;
-        const oppScore = isP1 ? scores.p2 : scores.p1;
-        const won = s.winnerID === player.id;
-        const event = eventMap[s.eventID];
+    if (sets.length === 0) {
+        container.innerHTML = `
+            <div class="detail-card-title">Match History</div>
+            <div style="color:var(--on-surface-dim);font-size:12px;padding:8px 0">No matches recorded.</div>
+        `;
+        return;
+    }
 
-        // Get chars from games
-        const myChars = [...new Set(s.games.map(g => isP1 ? g.player1Char : g.player2Char).filter(Boolean))];
-        const oppChars = [...new Set(s.games.map(g => isP1 ? g.player2Char : g.player1Char).filter(Boolean))];
+    // Group sets by event
+    const byEvent = {};
+    sets.forEach(s => {
+        const eid = s.eventID;
+        if (!byEvent[eid]) byEvent[eid] = [];
+        byEvent[eid].push(s);
+    });
 
-        const myAvatarSrc = myChars[0] && player.defaultCharColor
-            ? `/api/characters/${myChars[0]}/${player.defaultCharColor}/image` : "";
-        const oppAvatarSrc = oppChars[0] && opponent?.defaultCharColor
-            ? `/api/characters/${oppChars[0]}/${opponent.defaultCharColor}/image` : "";
+    // Sort events newest first
+    const sortedEventIDs = Object.keys(byEvent).sort((a, b) => {
+        const maxA = Math.max(...byEvent[a].map(s => s.id));
+        const maxB = Math.max(...byEvent[b].map(s => s.id));
+        return maxB - maxA;
+    });
+
+    const sections = sortedEventIDs.map(eid => {
+        const event = eventMap[eid];
+        const eventSets = byEvent[eid];
+        const eventWins = eventSets.filter(s => s.winnerID === player.id).length;
+        const eventLosses = eventSets.length - eventWins;
+
+        const rows = eventSets.map(s => {
+            const isP1 = s.player1ID === player.id;
+            const opponent = playerMap[isP1 ? s.player2ID : s.player1ID];
+            const scores = getSetScores(s, s.player1ID, s.player2ID);
+            const myScore = isP1 ? scores.p1 : scores.p2;
+            const oppScore = isP1 ? scores.p2 : scores.p1;
+            const won = s.winnerID === player.id;
+
+            const myChars = [...new Set(s.games.map(g => isP1 ? g.player1Char : g.player2Char).filter(Boolean))];
+            const oppChars = [...new Set(s.games.map(g => isP1 ? g.player2Char : g.player1Char).filter(Boolean))];
+            const myAvatarSrc = myChars[0] && player.defaultCharColor
+                ? `/api/characters/${myChars[0]}/${player.defaultCharColor}/image` : "";
+            const oppAvatarSrc = oppChars[0] && opponent?.defaultCharColor
+                ? `/api/characters/${oppChars[0]}/${opponent.defaultCharColor}/image` : "";
+
+            // Individual game rows
+            const gameRows = s.games.length > 0 ? s.games.map(g => {
+                const gWon = g.winnerID === player.id;
+                const gChar = isP1 ? g.player1Char : g.player2Char;
+                const gOppChar = isP1 ? g.player2Char : g.player1Char;
+                const gAvatarSrc = gChar && player.defaultCharColor
+                    ? `/api/characters/${gChar}/${player.defaultCharColor}/image` : "";
+                const gOppAvatarSrc = gOppChar && opponent?.defaultCharColor
+                    ? `/api/characters/${gOppChar}/${opponent.defaultCharColor}/image` : "";
+
+                return `
+                    <div class="game-row ${gWon ? "game-win" : "game-loss"}" data-game-id="${g.id}" data-set-id="${s.id}">
+                        <span class="game-outcome">${gWon ? "W" : "L"}</span>
+                        <div class="game-chars">
+                            ${gAvatarSrc ? `<img class="match-char-avatar" src="${gAvatarSrc}" onerror="this.style.display='none'">` : ""}
+                            <span class="game-vs-label">vs</span>
+                            ${gOppAvatarSrc ? `<img class="match-char-avatar" src="${gOppAvatarSrc}" onerror="this.style.display='none'">` : ""}
+                        </div>
+                        <span class="game-num">Game ${g.gameNumber}</span>
+                        <button class="game-delete-btn" data-game-id="${g.id}" data-set-id="${s.id}" title="Delete this game">🗑</button>
+                    </div>
+                `;
+            }).join("") : "";
+
+            return `
+                <div class="match-row ${won ? "match-win" : "match-loss"}">
+                    <div class="match-outcome-bar"></div>
+                    <div class="match-round-label">${s.round || "Unknown Round"}</div>
+                    <div class="match-players">
+                        <div class="match-side ${won ? "match-side-winner" : ""}">
+                            ${myAvatarSrc ? `<img class="match-char-avatar" src="${myAvatarSrc}" onerror="this.style.display='none'">` : ""}
+                            <span class="match-player-name">${player.name}</span>
+                            <span class="match-score">${myScore}</span>
+                        </div>
+                        <span class="match-vs">vs</span>
+                        <div class="match-side ${!won ? "match-side-winner" : ""}">
+                            <span class="match-score">${oppScore}</span>
+                            <span class="match-player-name">${opponent?.name || "Unknown"}</span>
+                            ${oppAvatarSrc ? `<img class="match-char-avatar" src="${oppAvatarSrc}" onerror="this.style.display='none'">` : ""}
+                        </div>
+                    </div>
+                    ${gameRows ? `<div class="game-rows">${gameRows}</div>` : ""}
+                </div>
+            `;
+        }).join("");
 
         return `
-            <div class="match-row ${won ? "match-win" : "match-loss"}">
-                <div class="match-outcome-bar"></div>
-                <div class="match-meta">
-                    <span class="match-event">${event?.eventTitle || "Unknown Event"}</span>
-                    <span class="match-round">${s.bracketRound || ""}</span>
-                </div>
-                <div class="match-players">
-                    <div class="match-side ${won ? "match-side-winner" : ""}">
-                        ${myAvatarSrc ? `<img class="match-char-avatar" src="${myAvatarSrc}" onerror="this.style.display='none'">` : ""}
-                        <span class="match-player-name">${player.name}</span>
-                        <span class="match-score">${myScore ?? "?"}</span>
-                    </div>
-                    <span class="match-vs">vs</span>
-                    <div class="match-side ${!won ? "match-side-winner" : ""}">
-                        <span class="match-score">${oppScore ?? "?"}</span>
-                        <span class="match-player-name">${opponent?.name || "Unknown"}</span>
-                        ${oppAvatarSrc ? `<img class="match-char-avatar" src="${oppAvatarSrc}" onerror="this.style.display='none'">` : ""}
-                    </div>
-                </div>
-            </div>
+            <details class="match-event-group" open>
+                <summary class="match-event-summary">
+                    <span class="match-event-name">${event?.eventTitle || "Unknown Event"}</span>
+                    <span class="match-event-record ${eventWins > eventLosses ? "record-pos" : eventLosses > eventWins ? "record-neg" : ""}">
+                        ${eventWins}W - ${eventLosses}L
+                    </span>
+                </summary>
+                <div class="match-event-rows">${rows}</div>
+            </details>
         `;
     }).join("");
 
     container.innerHTML = `
         <div class="detail-card-title">Match History</div>
-        ${rows}
+        ${sections}
     `;
+
+    // Wire delete buttons
+    container.querySelectorAll(".game-delete-btn").forEach(btn => {
+        btn.addEventListener("click", async e => {
+            e.stopPropagation();
+            const gameID = parseInt(btn.dataset.gameId);
+            const setID = parseInt(btn.dataset.setId);
+            if (!confirm("Delete this game record? This cannot be undone.")) return;
+            const res = await fetch(`/api/sets/${setID}/games/${gameID}`, {
+                method: "DELETE"
+            });
+            console.log("Delete status:", res.status);
+            const data = await res.json();
+            console.log("Delete response:", data);
+            if (data.ok) {
+                await selectPlayer(selectedPlayer);
+                showToast("Game deleted", "success");
+            }
+        });
+    });
 }
 // =====================
 // Save Player
