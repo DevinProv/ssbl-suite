@@ -1,6 +1,6 @@
 from flask import Flask, render_template
 from database import db
-from routes import players_bp, events_bp, sets_bp, characters_bp
+from routes import players_bp, events_bp, sets_bp, characters_bp, obs_bp
 from config import get_active_theme
 
 app = Flask(__name__)
@@ -11,6 +11,7 @@ app.register_blueprint(players_bp, url_prefix="/api")
 app.register_blueprint(events_bp, url_prefix="/api")
 app.register_blueprint(sets_bp, url_prefix="/api")
 app.register_blueprint(characters_bp, url_prefix="/api")
+app.register_blueprint(obs_bp, url_prefix="/api")
 
 @app.context_processor
 def inject_theme():

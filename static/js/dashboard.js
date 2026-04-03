@@ -125,7 +125,7 @@ async function selectPlayer(playerNum, player) {
             card.querySelector(".color-select").value = player.defaultCharColor;
         }
     }
-
+    updateCharacterImage(playerNum);
     const saveBtn = card.querySelector(".save-player-btn");
     saveBtn.style.display = "block";
     saveBtn.textContent = "🔄";
@@ -331,7 +331,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
         showAutoComplete(playerNum, players);
-        updateCharacterImage(playerNum);
+
         const saveBtn = card.querySelector(".save-player-btn");
 
         if (players.length === 0 && query.length > 0) {
