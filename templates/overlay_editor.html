@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>SSBL Overlay Editor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Inter:wght@400;500;600&family=Oswald:wght@700&family=Bebas+Neue&family=Anton&family=Barlow+Condensed:wght@700&family=Teko:wght@700&family=Russo+One&family=Exo+2:wght@700&family=Orbitron:wght@700&family=Black+Han+Sans&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/overlay_editor.css') }}">
+</head>
+<body>
+    <nav class="editor-nav">
+        <a href="/dashboard">⚡ Dashboard</a>
+        <a href="/players">👤 Players</a>
+        <a href="/overlay" class="active">🎬 Overlay</a>
+        <a href="/settings">⚙️ Settings</a>
+    </nav>
+    <div id="app">
+        <!-- Sidebar -->
+        <aside id="sidebar">
+
+        <div id="sidebar-header">
+            <div class="sidebar-logo">⚡ SSBL</div>
+            <div class="sidebar-sub">Overlay Editor</div>
+            <div class="scene-label">
+                <span class="scene-label-prefix">Scene:</span>
+                <span id="current-scene-label">—</span>
+            </div>
+        </div>
+
+            <div id="obs-status-bar">
+                <span class="status-dot" id="obs-dot"></span>
+                <span id="obs-label">OBS Disconnected</span>
+                <button id="obs-connect-btn" class="btn-sm">Connect</button>
+            </div>
+
+            <div id="obs-connect-panel" style="display:none;">
+                <input type="text" id="obs-host" placeholder="Host" value="localhost">
+                <input type="number" id="obs-port" placeholder="Port" value="4455">
+                <input type="password" id="obs-password" placeholder="Password">
+                <button id="obs-do-connect" class="btn-primary-sm">Connect to OBS</button>
+            </div>
+
+            <div class="sidebar-section-title">Elements</div>
+            <div id="element-list"></div>
+
+            <div class="sidebar-section-title">Background</div>
+            <div class="bg-controls">
+                <label class="field-label">Reference Image</label>
+                <input type="file" id="bg-upload" accept="image/*" style="display:none;">
+                <button class="btn-sm full-width" onclick="document.getElementById('bg-upload').click()">Upload Image</button>
+                <button class="btn-sm full-width" id="bg-clear-btn">Clear Background</button>
+            </div>
+
+            <div class="sidebar-actions">
+                <button id="save-btn" class="btn-primary full-width">💾 Save Config</button>
+                <button id="reset-btn" class="btn-ghost full-width">↺ Reset to Defaults</button>
+            </div>
+        </aside>
+
+        <!-- Main editor area -->
+        <div id="editor-area">
+            <div id="canvas-container">
+                <img id="bg-image" src="" style="display:none;">
+                <canvas id="grid-canvas"></canvas>
+                <div id="canvas-root"></div>
+            </div>
+        </div>
+
+        <!-- Properties panel -->
+        <aside id="props-panel">
+            <div id="props-header">
+                <span id="props-title">Select an element</span>
+            </div>
+            <div id="props-body">
+                <div class="no-selection">Click an element on the canvas to edit its properties</div>
+            </div>
+        </aside>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/overlay_editor.js') }}"></script>
+</body>
+</html>

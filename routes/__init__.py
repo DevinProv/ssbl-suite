@@ -3,3 +3,5 @@ from .events import events_bp
 from .matches import sets_bp
 from .characters import characters_bp
 from .obs import obs_bp
+from .overlay import overlay_bp
+from .settings import settings_bp

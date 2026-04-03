@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request
 from logic.obsmanager import obs_manager
+from config import get_obs_config, save_obs_config
 
 obs_bp = Blueprint("obs", __name__)
 
@@ -64,9 +65,28 @@ def get_screenshot():
         return jsonify({"error": "Failed to capture screenshot"}), 500
     return jsonify({"image": screenshot})
 
-@obs_bp.route("/obs/get_resolution", methods=["GET"])
+@obs_bp.route("/obs/resolution", methods=["GET"])
 def get_resolution():
     if not obs_manager.is_connected():
-        return jsonify({"error": "Not connected to OBS"}), 400
-    width, height = obs_manager.get_canvas_resolution()
-    return jsonify({"width": width, "height": height}) 
+        return jsonify({"error": "Not connected"}), 400
+    w, h = obs_manager.get_canvas_resolution()
+    return jsonify({"width": w, "height": h})
+
+@obs_bp.route("/obs/config", methods=["GET"])
+def obs_config_get():
+    return jsonify(get_obs_config())
+
+@obs_bp.route("/obs/config", methods=["POST"])
+def obs_config_save():
+    data = request.get_json()
+    save_obs_config(data)
+    return jsonify({"ok": True})
+                                
+@obs_bp.route("/obs/current-scene", methods=["GET"])
+def current_scene():
+    if not obs_manager.is_connected():
+        return jsonify({"error": "Not connected"}), 400
+    scene = obs_manager.get_current_scene()
+    if scene is None:
+        return jsonify({"error": "Could not get scene"}), 500
+    return jsonify({"scene": scene})

@@ -66,6 +66,7 @@ body {
 .sidebar a[href*="dashboard"]::before { content: '⚡'; }
 .sidebar a[href*="players"]::before   { content: '👤'; }
 .sidebar a[href*="settings"]::before  { content: '⚙️'; }
+.sidebar a[href*="overlay"]::before { content: '🎬'; }
 
 .sidebar a:hover {
     background-color: var(--surface-2);

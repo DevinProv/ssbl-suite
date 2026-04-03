@@ -1,6 +1,29 @@
 {% extends "base.html" %}
-{% block title %}Dashboard{% endblock %}
-
+{% block title %}Players{% endblock %}
+{% block styles %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/players.css') }}">
+{% endblock %}
 {% block content %}
-    <h1>Player Manager</h1>
+<h1>Player Manager</h1>
+
+<div class="players-layout">
+    <!-- Left: Player List -->
+    <div class="players-left">
+        <div class="players-search-wrap">
+            <input type="text" id="player-search" placeholder="Search players...">
+        </div>
+        <div class="player-list" id="player-list"></div>
+        <button class="add-player-btn" id="add-player-btn">+ New Player</button>
+    </div>
+
+    <!-- Right: Detail Panel -->
+    <div class="players-right" id="players-right">
+        <div class="player-placeholder">
+            <div class="player-placeholder-icon">👤</div>
+            <p>Select a player to view details</p>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/players.js') }}"></script>
 {% endblock %}

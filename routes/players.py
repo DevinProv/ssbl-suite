@@ -68,3 +68,13 @@ def search_players():
     
     players = Player.query.filter(Player.name.ilike(f"%{name_query}%")).all()
     return jsonify([serialize_player(p) for p in players])
+
+
+@players_bp.route("/players/<int:player_id>", methods=["DELETE"])
+def delete_player(player_id):
+    player = Player.query.get(player_id)
+    if player is None:
+        return jsonify({"error": "Player not found"}), 404
+    db.session.delete(player)
+    db.session.commit()
+    return jsonify({"ok": True})

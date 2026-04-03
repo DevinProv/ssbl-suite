@@ -33,7 +33,9 @@
     <nav class="sidebar">
         <a href="/dashboard" class="{{ 'active' if request.path == '/dashboard' or request.path == '/' else '' }}">Dashboard</a>
         <a href="/players" class="{{ 'active' if request.path == '/players' else '' }}">Players</a>
+        <a href="/overlay" class="{{ 'active' if request.path == '/overlay' else '' }}">Overlay</a>
         <a href="/settings" class="{{ 'active' if request.path == '/settings' else '' }}">Settings</a>
+        
     </nav>
     <main class="content">
         {% block content %}{% endblock %}

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block styles %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
+{% endblock %}
+{% block content %}
+<div class="settings-container">
+    <h1>Settings</h1>
+
+    <div class="settings-card">
+        <h2>OBS WebSocket</h2>
+        <div class="settings-status">
+            <span class="status-dot" id="obs-dot"></span>
+            <span id="obs-status-label">Checking...</span>
+        </div>
+        <div class="settings-form">
+            <div class="field-group">
+                <label>Host</label>
+                <input type="text" id="obs-host" placeholder="localhost">
+            </div>
+            <div class="field-group">
+                <label>Port</label>
+                <input type="number" id="obs-port" placeholder="4455">
+            </div>
+            <div class="field-group">
+                <label>Password</label>
+                <input type="password" id="obs-password" placeholder="Password">
+            </div>
+            <div class="settings-actions">
+                <button id="obs-connect-btn" class="btn-primary">Connect</button>
+                <button id="obs-disconnect-btn" class="btn-danger">Disconnect</button>
+                <button id="obs-save-btn" class="btn-ghost">Save Config</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-card">
+        <h2>Theme</h2>
+        <div class="field-group">
+            <label>Active Theme</label>
+            <select id="theme-select">
+                <option value="midnight_arena">Midnight Arena</option>
+                <option value="moonlit_mist">Moonlit Mist</option>
+            </select>
+        </div>
+        <button id="theme-save-btn" class="btn-primary">Apply Theme</button>
+    </div>
+</div>
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+{% endblock %}

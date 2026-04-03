@@ -1,7 +1,7 @@
-from sqlalchemy import Integer, String, ForeignKey, Float
+from sqlalchemy import Integer, String, ForeignKey, Float, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 from database import db
-
+from typing import Optional
 
 class Player(db.Model):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -14,6 +14,7 @@ class Event(db.Model):
     eventTitle: Mapped[str] = mapped_column(String, nullable=False)
     eventDate: Mapped[str] = mapped_column(String, nullable=False)
     bracketLink: Mapped[str | None] = mapped_column(String, nullable=True)
+    rounds: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=list)
 
 class MatchSet(db.Model):
     __tablename__ = "match_set"
@@ -35,4 +36,10 @@ class Game(db.Model):
     player1Char: Mapped[str | None] = mapped_column(String, nullable=True)
     player2Char: Mapped[str | None] = mapped_column(String, nullable=True)
     winnerID: Mapped[int] = mapped_column(Integer, ForeignKey("player.id"), nullable=False)
+
+class RoundTemplate(db.Model):
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    rounds: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    is_builtin: Mapped[bool] = mapped_column(db.Boolean, nullable=False, default=False)
 

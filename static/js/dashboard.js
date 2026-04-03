@@ -18,8 +18,47 @@ let state = {
     bracketRound: "",
     gameNumber: 1
 }
+let overlayWs = null;
 let availableChars = [];
 let suppressBlur = false;
+
+// Connect Overlay
+function connectOverlayWS() {
+    overlayWs = new WebSocket(`ws://${location.host}/ws/overlay`);
+    overlayWs.onclose = () => setTimeout(connectOverlayWS, 2000);
+}
+connectOverlayWS();
+// Push Overlay State
+function pushOverlayState() {
+    const payload = {
+        player1: {
+            name: state.player1.name || "Player 1",
+            char: state.player1.char || "",
+            color: state.player1.color || "",
+            score: state.player1.score
+        },
+        player2: {
+            name: state.player2.name || "Player 2",
+            char: state.player2.char || "",
+            color: state.player2.color || "",
+            score: state.player2.score
+        },
+        round: state.bracketRound || "",
+        event: (() => {
+            const sel = document.getElementById("event-select");
+            return sel ? sel.options[sel.selectedIndex]?.text || "" : "";    
+        })()
+    };
+    sessionStorage.setItem("ssbl_state", JSON.stringify(state));
+    fetch("/api/overlay/state", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+    });
+}
+// Create Player Card
 function createPlayerCard(playerNum){
     const template = document.getElementById("player-card-template");
     const clone = template.content.cloneNode(true);
@@ -36,6 +75,40 @@ function createPlayerCard(playerNum){
     
     document.getElementById("player-cards-container").appendChild(clone);
 }
+async function restorePlayerUI(){
+    for (const playerNum of [1, 2]) {
+        const p = state[`player${playerNum}`];
+        if (!p.name) continue;
+        const card = document.getElementById(`player${playerNum}-card`);
+        card.querySelector(".card-title").textContent = p.name;
+        card.querySelector(".player-input").value = p.name;
+
+        if(p.char){
+            card.querySelector(".char-select").value = p.char;
+            await fetchCharColors(playerNum, p.char);
+            if(p.color){
+                card.querySelector(".color-select").value = p.color;
+            }
+        }
+        updateCharacterImage(playerNum);
+        card.querySelector(".player-score").textContent = p.score;
+        if (p.id !== null) {
+            const saveBtn = card.querySelector(".save-player-btn");
+            saveBtn.style.display = "block";
+            saveBtn.textContent = "🔄";
+            saveBtn.title = "Update Defaults";
+        }
+    }
+
+    if (state.bracketRound) {
+        document.getElementById("round-input").value = state.bracketRound;
+    }
+    
+    if (state.setID) {
+        document.getElementById("start-set-btn").style.display = "none";
+        document.getElementById("end-set-btn").style.dispaly = "block";
+    }
+}
 // Fetch Data
 async function fetchEvents(){
     const response = await fetch("api/events");
@@ -48,9 +121,13 @@ async function fetchEvents(){
         option.textContent = event.eventTitle;
         eventSelect.appendChild(option);
     });
-    if(events.length > 0){
+    if(state.eventID){
+        eventSelect.value = state.eventID;
+    } else if(events.length > 0){
         state.eventID = events[0].id;
+        eventSelect.value = events[0].id;
     }
+
 }
 async function fetchChars(){
     const response = await fetch("api/characters")
@@ -130,7 +207,7 @@ async function selectPlayer(playerNum, player) {
     saveBtn.style.display = "block";
     saveBtn.textContent = "🔄";
     saveBtn.title = "Update Defaults";
-
+    pushOverlayState();
     setTimeout(() => { suppressBlur = false; }, 200);
 }
 // Edit Name Swap
@@ -261,6 +338,7 @@ async function endSet(){
     document.querySelector("#player2-card .player-score").textContent = "0";
     document.getElementById("start-set-btn").style.display = "block";
     document.getElementById("end-set-btn").style.display = "none";
+    pushOverlayState();
 }
 // Get Current Game Number
 async function getCurrentGameNumber(){
@@ -290,6 +368,7 @@ async function updateScore(playerNum, delta){
     await addMatch(state[`player${playerNum}`].id);
     const card = document.getElementById(`player${playerNum}-card`);
     card.querySelector(".player-score").textContent = state[`player${playerNum}`].score;
+    pushOverlayState();
 }
 
 // Update Character Image
@@ -311,9 +390,17 @@ function updateCharacterImage(playerNum){
     }
 }
 // On DOM Load
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+    const saved = sessionStorage.getItem("ssbl_state");
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved);
+            Object.assign(state, parsed);
+        } catch(e) {}
+    }
     createPlayerCard(1);
     createPlayerCard(2);
+    await restorePlayerUI();
     fetchEvents();
     fetchChars();
     // Name Autocomplete Listener
@@ -333,7 +420,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const response = await fetch(`/api/players/search?q=${query}`);
         const players = await response.json();
         const exactMatch = players.find(p => p.name.toLowerCase() === query.toLowerCase());
-        console.log("query: ",query, "exactMatch: ", exactMatch);
         if (exactMatch) {
             if (ghost) ghost.value = "";
             await selectPlayer(playerNum, exactMatch);
@@ -366,10 +452,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // Round Input Listener
     document.getElementById("round-input").addEventListener("input", (e) => {
         state.bracketRound = e.target.value;
+        pushOverlayState();
     }); 
     // Event Select Listener
     document.getElementById("event-select").addEventListener("change", (e) => {
         state.eventID = e.target.value ? parseInt(e.target.value) : null
+        pushOverlayState();
     });
 
     // Blur Player Name Listener
@@ -435,6 +523,7 @@ document.addEventListener("DOMContentLoaded", () => {
             state[`player${playerNum}`].color = e.target.value;
         }
         updateCharacterImage(playerNum);
+        pushOverlayState();
         if (state[`player${playerNum}`].id !== null){
             
             const saveBtn = card.querySelector(".save-player-btn");
