@@ -1,5 +1,6 @@
 # logic/obsmanager.py
 import obsws_python as obs
+import os
 
 class OBSManager:
     def __init__(self):
@@ -101,5 +102,44 @@ class OBSManager:
         except Exception as e:
             print(f"[OBS] Set source error: {e}")
             return False
-
+    def get_latest_recording(self):
+        if not self._client:
+            return None
+        try:
+            directory = self._client.get_record_directory().record_directory
+            files = sorted(
+                [f for f in os.listdir(directory) if f.endswith((".mkv", ".mp4", ".flv"))],
+                key=lambda f: os.path.getmtime(os.path.join(directory, f)),
+                reverse=True
+            )
+            return os.path.join(directory, files[0]) if files else None
+        except Exception as e:
+            print(f"[OBS] Error getting latest recording: {e}")
+            return None
+        
+    def get_canvas_screenshot(self, width=1920, height=1080):
+        if not self._client:
+            return None
+        try:
+            response = self._client.get_source_screenshot(
+                source_name=self._client.get_current_program_scene().current_program_scene_name,
+                img_format="jpg",
+                img_width=width,
+                img_height=height,
+                img_quality=70
+            )
+            return response.image_data  # returns base64 data URI already formatted
+        except Exception as e:
+            print(f"[OBS] Screenshot error: {e}")
+            return None
+        
+    def get_canvas_resolution(self):
+        if not self._client:
+            return 1920, 1080  # sensible default
+        try:
+            response = self._client.get_video_settings()
+            return response.base_width, response.base_height
+        except Exception as e:
+            print(f"[OBS] Resolution error: {e}")
+            return 1920, 1080
 obs_manager = OBSManager()

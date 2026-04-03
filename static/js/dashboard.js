@@ -202,6 +202,19 @@ async function startSet(){
         alert("Please select an event, enter a round, and select both players before starting the set.");
         return;
     }
+
+    let vodFilename = null;
+    let vodTimestampStart = null;
+
+    const obsStatus = await fetch("/api/obs/status").then(r => r.json());
+    if(obsStatus.connected){
+        const [filenameRes, timestampRes] = await Promise.all([
+            fetch("/api/obs/latest-recording").then(r => r.json()),
+            fetch("/api/obs/timestamp").then(r => r.json())
+        ]);
+        vodFilename = filenameRes.filename ?? null;
+        vodTimestampStart = timestampRes.duration ?? null;
+    }
     const response = await fetch("/api/sets", {
         method: "POST",
         headers: {
@@ -212,9 +225,8 @@ async function startSet(){
             bracketRound: state.bracketRound,
             player1ID: state.player1.id,
             player2ID: state.player2.id,
-            //TODO: Implement VOD Integration when OBS Websocket Integration is added
-            vodFilename: "",
-            vodTimestampStart: null, 
+            vodFilename: vodFilename,
+            vodTimestampStart: vodTimestampStart, 
             vodTimestampEnd: null,
             winnerID: null
         })
@@ -225,19 +237,28 @@ async function startSet(){
     document.getElementById("end-set-btn").style.display = "block";
 }
 async function endSet(){
+    let vodTimestampEnd = null;
+    const obsStatus = await fetch("/api/obs/status").then(r => r.json());
+    if(obsStatus.connected){
+        const timestampRes = await fetch("/api/obs/timestamp").then(r => r.json());
+        vodTimestampEnd = timestampRes.duration ?? null;
+    }
     const response = await fetch(`/api/sets/${state.setID}`, {
         method: "PUT",
         headers: {
             "Content-Type": "application/json"
         },
         body: JSON.stringify({
-            //Todo: Implement VOD Integration when OBS Websocket Integration is added
-            vodTimestampEnd: null,
+            vodTimestampEnd: vodTimestampEnd,
             winnerID: state.player1.score > state.player2.score ? state.player1.id : state.player2.id
         })
     });
     const match_set = await response.json();
     state.setID = null;
+    state.player1.score = 0;
+    state.player2.score = 0;
+    document.querySelector("#player1-card .player-score").textContent = "0";
+    document.querySelector("#player2-card .player-score").textContent = "0";
     document.getElementById("start-set-btn").style.display = "block";
     document.getElementById("end-set-btn").style.display = "none";
 }
