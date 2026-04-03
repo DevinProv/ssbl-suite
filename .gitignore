@@ -13,3 +13,5 @@ venv/
 *.swp
 .DS_Store
 repomix-output.xml
+static/obs_config.json
+static/overlay_config.json
