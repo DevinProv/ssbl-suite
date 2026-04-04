@@ -25,7 +25,7 @@ jobs:
         pip install pyinstaller
 
     - name: Build with PyInstaller
-      run: pyinstaller --onefile your_app.py # Replace your_app.py with your main script name
+      run: pyinstaller --onefile app.py # Replace your_app.py with your main script name
 
     - name: Upload Executable
       uses: actions/upload-artifact@v4
