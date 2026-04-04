@@ -8,6 +8,8 @@ from routes.overlay import overlay_bp, _connected_overlays, broadcast_state, bro
 from config import get_active_theme, get_obs_config
 import json
 import os
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
 
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1" #prod
 os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1" #prod
