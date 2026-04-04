@@ -351,17 +351,27 @@ function renderImportPreview(data) {
                 <div class="import-preview-meta">${sub.matches.length} matches · ${sub.unique_rounds.length} rounds</div>
             </div>
             <div class="import-match-list">
-                ${sub.matches.slice(0, 8).map(m => `
+                ${sub.matches.slice(0, 8).map(m => {
+                    const isDoubles = m.mode === "doubles";
+                    const p1Display = isDoubles
+                        ? `${m.p1_name} <span style="font-size:10px;color:var(--on-surface-dim)">(${m.t1p1_name}/${m.t1p2_name})</span>`
+                        : m.p1_name;
+                    const p2Display = isDoubles
+                        ? `${m.p2_name} <span style="font-size:10px;color:var(--on-surface-dim)">(${m.t2p1_name}/${m.t2p2_name})</span>`
+                        : m.p2_name;
+                    const p1Class = m.p1_found ? "player-found" : "player-missing";
+                    const p2Class = m.p2_found ? "player-found" : "player-missing";
+                    return `
                     <div class="import-match-row">
-                        <span class="import-round-badge">${m.round}</span>
+                        <span class="import-round-badge">${m.round}${isDoubles ? ' <span style="color:var(--primary);font-size:9px">2v2</span>' : ''}</span>
                         <span class="import-match-players">
-                            <span class="${m.p1_found ? "player-found" : "player-missing"}">${m.p1_name}</span>
+                            <span class="${p1Class}">${p1Display}</span>
                             <span style="color:var(--on-surface-dim)"> vs </span>
-                            <span class="${m.p2_found ? "player-found" : "player-missing"}">${m.p2_name}</span>
+                            <span class="${p2Class}">${p2Display}</span>
                         </span>
                         ${m.winner_name ? `<span class="import-match-winner">🏆 ${m.winner_name}</span>` : ""}
-                    </div>
-                `).join("")}
+                    </div>`;
+                }).join("")}
                 ${sub.matches.length > 8 ? `
                     <div style="padding:6px 14px;font-size:11px;color:var(--on-surface-dim);border-top:1px solid var(--outline)">
                         + ${sub.matches.length - 8} more matches

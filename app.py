@@ -3,12 +3,14 @@ import secrets
 from flask import Flask, render_template
 from flask_sock import Sock
 from database import db
-from routes import players_bp, events_bp, sets_bp, characters_bp, obs_bp, settings_bp, video_bp, events_mgmt_bp
+from routes import players_bp, events_bp, sets_bp, characters_bp, obs_bp, settings_bp, video_bp, events_mgmt_bp, export_bp
 from routes.overlay import overlay_bp, _connected_overlays, broadcast_state, broadcast_scene_change
 from config import get_active_theme, get_obs_config
 import json
 import os
 
+os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1" #prod
+os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1" #prod
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///ssbl.db"
 db.init_app(app)
@@ -25,7 +27,7 @@ app.register_blueprint(settings_bp, url_prefix="/api")
 app.register_blueprint(overlay_bp)
 app.register_blueprint(video_bp, url_prefix="/api")
 app.register_blueprint(events_mgmt_bp, url_prefix="/api")
-
+app.register_blueprint(export_bp, url_prefix="/api")
 @app.context_processor
 def inject_theme():
     return {"theme": get_active_theme()}
@@ -94,4 +96,4 @@ with app.app_context():
                 broadcast_scene_change(scene)
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0")
+    app.run(debug=True, host="0.0.0.0", threaded = True)

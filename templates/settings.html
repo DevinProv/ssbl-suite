@@ -71,6 +71,48 @@
         </div>
         <button id="theme-save-btn" class="btn-primary">Apply Theme</button>
     </div>
+    <div class="settings-card">
+        <h2>Data Sync</h2>
+        <p style="font-size:12px;color:var(--on-surface-dim);line-height:1.6">
+            Sync tournament data to a GitHub repository after each event.
+            Create a public repo for gasmash.live (or any frontend) to read from.
+            Generate a token at
+            <a href="https://github.com/settings/tokens/new?scopes=repo&description=SSBL+Sync" target="_blank" style="color:var(--primary)">GitHub → Settings → Developer → Personal access tokens</a>
+            with <strong style="color:var(--on-surface)">repo</strong> scope.
+        </p>
+        <div class="settings-form">
+            <div class="field-group">
+                <label>GitHub Repo</label>
+                <input type="text" id="sync-repo" placeholder="username/repo-name">
+            </div>
+            <div class="field-group">
+                <label>Branch</label>
+                <input type="text" id="sync-branch" placeholder="main">
+            </div>
+            <div class="field-group">
+                <label>Personal Access Token</label>
+                <div style="display:flex;gap:8px">
+                    <input type="password" id="sync-token" placeholder="ghp_...">
+                    <button type="button" id="sync-token-toggle" class="btn-ghost" style="flex-shrink:0;padding:0 12px">👁</button>
+                </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 0">
+                <label class="toggle-switch" style="margin:0">
+                    <input type="checkbox" id="sync-auto">
+                    <span class="toggle-slider"></span>
+                </label>
+                <span style="font-size:13px;color:var(--on-surface)">Auto-sync after each set ends</span>
+            </div>
+            <div class="settings-status" id="sync-status" style="display:none">
+                <span class="status-dot connected"></span>
+                <span id="sync-status-label">Last synced: never</span>
+            </div>
+            <div class="settings-actions">
+                <button id="sync-save-btn" class="btn-primary">Save</button>
+                <button id="sync-now-btn" class="btn-ghost">↑ Sync Now</button>
+            </div>
+        </div>
+    </div>
 </div>
 <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
 {% endblock %}

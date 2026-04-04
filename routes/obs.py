@@ -90,3 +90,15 @@ def current_scene():
     if scene is None:
         return jsonify({"error": "Could not get scene"}), 500
     return jsonify({"scene": scene})
+
+@obs_bp.route("/obs/debug-recording", methods=["GET"])
+def debug_recording():
+    if not obs_manager.is_connected():
+        return jsonify({"error": "Not connected"}), 400
+    try:
+        directory = obs_manager._client.get_record_directory().record_directory
+        import os
+        files = os.listdir(directory) if os.path.exists(directory) else []
+        return jsonify({"directory": directory, "files": files[:10]})
+    except Exception as e:
+        return jsonify({"error": str(e)})

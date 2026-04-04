@@ -762,7 +762,7 @@ async function endSet() {
     if (obsStatus.connected) {
         try {
             const timestampRes = await fetch("/api/obs/timestamp").then(r => r.ok ? r.json() : null);
-            vodTimestampEnd = timestampRes?.duration ?? null;
+            vodTimestampEnd = timestampRes?.duration != null ? timestampRes.duration + 2000 : null;
         } catch (e) {
             console.warn("[OBS] Could not get timestamp:", e);
         }
@@ -803,6 +803,19 @@ async function endSet() {
     // Re-render to reset scores display
     renderMatchArea();
     pushOverlayState();
+
+    // Auto-sync to GitHub if enabled
+    fetch("/api/sync/status").then(r => r.json()).then(status => {
+        if (status.auto_sync) {
+            fetch("/api/sync/push", { method: "POST" })
+                .then(r => r.json())
+                .then(res => {
+                    if (res.ok) console.log("[Sync] Auto-synced to GitHub");
+                    else console.warn("[Sync] Auto-sync failed:", res.error);
+                })
+                .catch(e => console.warn("[Sync] Auto-sync error:", e));
+        }
+    }).catch(() => {});
 }
 
 // =====================

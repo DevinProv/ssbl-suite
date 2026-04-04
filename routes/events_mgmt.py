@@ -1,12 +1,11 @@
 from flask import Blueprint, jsonify, request
 from database import db
-from models import Event, Player, MatchSet, RoundTemplate
+from models import Event, Player, MatchSet, Game, GameParticipant, Team, RoundTemplate
 from sqlalchemy.orm.attributes import flag_modified
 import json
 import os
 import re
 import urllib.request
-import urllib.parse
 import urllib.error
 
 events_mgmt_bp = Blueprint("events_mgmt", __name__)
@@ -18,9 +17,12 @@ STARTGG_CONFIG_PATH = os.path.join(BASE_DIR, "static", "startgg_config.json")
 DEFAULT_ROUND_MAP = {
     "Grand Final": "Grand Finals",
     "Grand Finals": "Grand Finals",
+    "Final": "Grand Finals",
     "Winners Final": "Winners Finals",
     "Winners Semi-Final": "Semis",
     "Winners Quarter-Final": "Quarters",
+    "Semi-Final": "Semis",
+    "Quarter-Final": "Quarters",
     "Losers Final": "Losers Finals",
     "Losers Semi-Final": "Losers Semis",
     "Losers Quarter-Final": "Losers Quarters",
@@ -70,7 +72,6 @@ def set_round_map():
 @events_mgmt_bp.route("/startgg/config", methods=["GET"])
 def get_startgg_config():
     cfg = load_startgg_config()
-    # Mask key for display
     key = cfg.get("api_key", "")
     return jsonify({"api_key": key, "has_key": bool(key)})
 
@@ -105,6 +106,12 @@ def detect_source(url):
         return "challonge"
     return None
 
+def strip_tag(name):
+    """Strip sponsor/team tag prefix. 'GA64 | Oromia64' -> 'Oromia64'"""
+    if "|" in name:
+        return name.split("|", 1)[1].strip()
+    return name.strip()
+
 # =====================
 # Challonge helpers
 # =====================
@@ -125,7 +132,7 @@ def fetch_challonge(json_url):
     try:
         req = urllib.request.Request(
             json_url + "?include_participants=1&include_matches=1",
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            headers={"User-Agent": "Mozilla/5.0"}
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
             return json.loads(resp.read())
@@ -210,6 +217,7 @@ def build_challonge_preview(url):
 
         preview_matches.append({
             "round": translated_round,
+            "mode": "singles",
             "p1_name": p1_name,
             "p2_name": p2_name,
             "winner_name": winner_name,
@@ -223,7 +231,6 @@ def build_challonge_preview(url):
     unique_rounds = list(dict.fromkeys(m["round"] for m in preview_matches))
     existing_event = Event.query.filter_by(bracketSlug=slug).first()
 
-    # Challonge is always one event
     return {
         "source": "challonge",
         "slug": slug,
@@ -243,16 +250,13 @@ def build_challonge_preview(url):
 # start.gg helpers
 # =====================
 def parse_startgg_url(url):
-    """Extract tournament slug from a start.gg URL."""
     url = url.strip().rstrip("/")
-    # https://www.start.gg/tournament/my-tournament/...
     m = re.match(r"https?://(?:www\.)?(?:start|smash)\.gg/tournament/([^/?#]+)", url)
     if m:
         return m.group(1)
     return None
 
 def startgg_query(query, variables, api_key):
-    """Execute a GraphQL query against the start.gg API."""
     endpoint = "https://api.start.gg/gql/alpha"
     payload = json.dumps({"query": query, "variables": variables}).encode("utf-8")
     req = urllib.request.Request(
@@ -284,6 +288,10 @@ query TournamentEvents($slug: String!) {
       name
       slug
       numEntrants
+      teamRosterSize {
+        minPlayers
+        maxPlayers
+      }
     }
   }
 }
@@ -299,9 +307,19 @@ query EventSets($eventId: ID!, $page: Int!, $perPage: Int!) {
         fullRoundText
         winnerId
         slots {
+          standing {
+            stats {
+              score {
+                value
+              }
+            }
+          }
           entrant {
             id
             name
+            participants {
+              gamerTag
+            }
           }
         }
       }
@@ -309,6 +327,46 @@ query EventSets($eventId: ID!, $page: Int!, $perPage: Int!) {
   }
 }
 """
+
+def parse_entrant(entrant):
+    """
+    Parse a start.gg entrant into a normalized dict.
+    Singles: { type: "singles", player_name: "Oromia64", entrant_id: ... }
+    Doubles: { type: "doubles", team_name: "XIB", player1: "XIF", player2: "BLNT", entrant_id: ... }
+    """
+    if not entrant:
+        return None
+
+    participants = entrant.get("participants", [])
+    entrant_id = entrant["id"]
+    entrant_name = entrant.get("name", "")
+
+    if len(participants) == 1:
+        # Singles — use gamerTag, strip tag prefix
+        tag = strip_tag(participants[0].get("gamerTag", entrant_name))
+        return {
+            "type": "singles",
+            "player_name": tag,
+            "entrant_id": entrant_id,
+        }
+    elif len(participants) == 2:
+        # Doubles — team name from entrant.name, players from participants
+        p1 = strip_tag(participants[0].get("gamerTag", ""))
+        p2 = strip_tag(participants[1].get("gamerTag", ""))
+        return {
+            "type": "doubles",
+            "team_name": entrant_name,
+            "player1": p1,
+            "player2": p2,
+            "entrant_id": entrant_id,
+        }
+    else:
+        # Fallback for unexpected participant counts
+        return {
+            "type": "singles",
+            "player_name": strip_tag(entrant_name),
+            "entrant_id": entrant_id,
+        }
 
 def fetch_startgg_sets(event_id, api_key):
     """Fetch all completed sets for a start.gg event, paginating as needed."""
@@ -334,18 +392,26 @@ def fetch_startgg_sets(event_id, api_key):
             slots = s.get("slots", [])
             if len(slots) < 2:
                 continue
-            p1_entrant = slots[0].get("entrant")
-            p2_entrant = slots[1].get("entrant")
-            if not p1_entrant or not p2_entrant:
+            e1 = parse_entrant(slots[0].get("entrant"))
+            e2 = parse_entrant(slots[1].get("entrant"))
+            if not e1 or not e2:
                 continue
+
+            # Extract scores from standing stats (may be None if not reported)
+            score1 = slots[0].get("standing", {}).get("stats", {}).get("score", {}).get("value")
+            score2 = slots[1].get("standing", {}).get("stats", {}).get("score", {}).get("value")
+            # Scores can be -1 (DQ), treat those as 0
+            if score1 is not None and score1 < 0: score1 = 0
+            if score2 is not None and score2 < 0: score2 = 0
+
             all_sets.append({
                 "id": s["id"],
                 "round": s.get("fullRoundText") or "Unknown Round",
-                "p1_name": p1_entrant["name"],
-                "p2_name": p2_entrant["name"],
-                "p1_id": p1_entrant["id"],
-                "p2_id": p2_entrant["id"],
-                "winner_id": s.get("winnerId"),
+                "winner_entrant_id": s.get("winnerId"),
+                "entrant1": e1,
+                "entrant2": e2,
+                "score1": score1,  # entrant1's game wins (None if unreported)
+                "score2": score2,
             })
 
         if page >= total_pages:
@@ -362,7 +428,6 @@ def build_startgg_preview(url, api_key):
     if not slug:
         return {"error": "Invalid start.gg URL. Expected format: start.gg/tournament/your-tournament"}
 
-    # Fetch all events in tournament
     result = startgg_query(TOURNAMENT_EVENTS_QUERY, {"slug": slug}, api_key)
     if "errors" in result:
         return {"error": f"start.gg API error: {result['errors'][0]['message']}"}
@@ -389,44 +454,96 @@ def build_startgg_preview(url, api_key):
 
         sets, error = fetch_startgg_sets(event_id, api_key)
         if error:
-            # Skip events we can't fetch rather than failing the whole import
             continue
         if not sets:
             continue
+
+        # Detect mode from first set's entrant type
+        first_type = sets[0]["entrant1"]["type"] if sets else "singles"
+        event_mode = first_type  # "singles" or "doubles"
 
         preview_matches = []
         unmatched_names = set()
 
         for s in sets:
-            p1_name = s["p1_name"]
-            p2_name = s["p2_name"]
-            winner_id = s["winner_id"]
-
-            # Determine winner name
-            winner_name = None
-            if winner_id:
-                if winner_id == s["p1_id"]: winner_name = p1_name
-                elif winner_id == s["p2_id"]: winner_name = p2_name
-
+            e1 = s["entrant1"]
+            e2 = s["entrant2"]
+            winner_eid = s["winner_entrant_id"]
             translated_round = translate_round(s["round"], round_map)
 
-            p1_db = find_player_by_name_or_alias(p1_name)
-            p2_db = find_player_by_name_or_alias(p2_name)
-            if not p1_db: unmatched_names.add(p1_name)
-            if not p2_db: unmatched_names.add(p2_name)
-            all_unmatched.update(unmatched_names)
+            if event_mode == "singles":
+                p1_name = e1["player_name"]
+                p2_name = e2["player_name"]
+                winner_name = None
+                if winner_eid:
+                    if winner_eid == e1["entrant_id"]: winner_name = p1_name
+                    elif winner_eid == e2["entrant_id"]: winner_name = p2_name
 
-            preview_matches.append({
-                "round": translated_round,
-                "p1_name": p1_name,
-                "p2_name": p2_name,
-                "winner_name": winner_name,
-                "p1_found": p1_db is not None,
-                "p2_found": p2_db is not None,
-                "p1_db_id": p1_db.id if p1_db else None,
-                "p2_db_id": p2_db.id if p2_db else None,
-            })
+                p1_db = find_player_by_name_or_alias(p1_name)
+                p2_db = find_player_by_name_or_alias(p2_name)
+                if not p1_db: unmatched_names.add(p1_name)
+                if not p2_db: unmatched_names.add(p2_name)
 
+                preview_matches.append({
+                    "round": translated_round,
+                    "mode": "singles",
+                    "p1_name": p1_name,
+                    "p2_name": p2_name,
+                    "winner_name": winner_name,
+                    "score1": s.get("score1"),
+                    "score2": s.get("score2"),
+                    "p1_found": p1_db is not None,
+                    "p2_found": p2_db is not None,
+                    "p1_db_id": p1_db.id if p1_db else None,
+                    "p2_db_id": p2_db.id if p2_db else None,
+                })
+
+            else:  # doubles
+                team1_name = e1["team_name"]
+                team2_name = e2["team_name"]
+                t1p1_name = e1["player1"]
+                t1p2_name = e1["player2"]
+                t2p1_name = e2["player1"]
+                t2p2_name = e2["player2"]
+
+                winner_team_name = None
+                if winner_eid:
+                    if winner_eid == e1["entrant_id"]: winner_team_name = team1_name
+                    elif winner_eid == e2["entrant_id"]: winner_team_name = team2_name
+
+                # Check all 4 individual players
+                t1p1_db = find_player_by_name_or_alias(t1p1_name)
+                t1p2_db = find_player_by_name_or_alias(t1p2_name)
+                t2p1_db = find_player_by_name_or_alias(t2p1_name)
+                t2p2_db = find_player_by_name_or_alias(t2p2_name)
+                for name, found in [(t1p1_name, t1p1_db), (t1p2_name, t1p2_db),
+                                     (t2p1_name, t2p1_db), (t2p2_name, t2p2_db)]:
+                    if not found: unmatched_names.add(name)
+
+                preview_matches.append({
+                    "round": translated_round,
+                    "mode": "doubles",
+                    # Team names for display in preview
+                    "p1_name": team1_name,
+                    "p2_name": team2_name,
+                    # Individual players
+                    "t1p1_name": t1p1_name,
+                    "t1p2_name": t1p2_name,
+                    "t2p1_name": t2p1_name,
+                    "t2p2_name": t2p2_name,
+                    "winner_name": winner_team_name,
+                    "score1": s.get("score1"),
+                    "score2": s.get("score2"),
+                    # Found status per individual player
+                    "t1p1_found": t1p1_db is not None,
+                    "t1p2_found": t1p2_db is not None,
+                    "t2p1_found": t2p1_db is not None,
+                    "t2p2_found": t2p2_db is not None,
+                    "p1_found": t1p1_db is not None and t1p2_db is not None,
+                    "p2_found": t2p1_db is not None and t2p2_db is not None,
+                })
+
+        all_unmatched.update(unmatched_names)
         unique_rounds = list(dict.fromkeys(m["round"] for m in preview_matches))
         existing_event = Event.query.filter_by(bracketSlug=event_slug).first()
         total_matches += len(preview_matches)
@@ -435,6 +552,7 @@ def build_startgg_preview(url, api_key):
             "title": compound_title,
             "slug": event_slug,
             "event_id": event_id,
+            "mode": event_mode,
             "matches": preview_matches,
             "unique_rounds": unique_rounds,
             "existing_event": {"id": existing_event.id, "title": existing_event.eventTitle} if existing_event else None,
@@ -452,6 +570,48 @@ def build_startgg_preview(url, api_key):
         "unmatched_names": list(all_unmatched),
         "total_matches": total_matches,
     }
+
+
+def create_dummy_games(match_set, winner_players, loser_players, winner_score, loser_score,
+                       winner_team_id=None, loser_team_id=None):
+    """
+    Create dummy Game + GameParticipant rows from a score (e.g. 3-1).
+    No character data — just winners and losers per game.
+    winner_score games go to winner, loser_score games go to loser.
+    """
+    game_num = 1
+    # Winner's games
+    for _ in range(winner_score):
+        game = Game(setID=match_set.id, gameNumber=game_num)
+        db.session.add(game)
+        db.session.flush()
+        for p in winner_players:
+            db.session.add(GameParticipant(
+                gameID=game.id, playerID=p.id,
+                teamID=winner_team_id, character=None, isWinner=True
+            ))
+        for p in loser_players:
+            db.session.add(GameParticipant(
+                gameID=game.id, playerID=p.id,
+                teamID=loser_team_id, character=None, isWinner=False
+            ))
+        game_num += 1
+    # Loser's games
+    for _ in range(loser_score):
+        game = Game(setID=match_set.id, gameNumber=game_num)
+        db.session.add(game)
+        db.session.flush()
+        for p in loser_players:
+            db.session.add(GameParticipant(
+                gameID=game.id, playerID=p.id,
+                teamID=loser_team_id, character=None, isWinner=True
+            ))
+        for p in winner_players:
+            db.session.add(GameParticipant(
+                gameID=game.id, playerID=p.id,
+                teamID=winner_team_id, character=None, isWinner=False
+            ))
+        game_num += 1
 
 # =====================
 # Preview route (unified)
@@ -483,11 +643,6 @@ def import_preview():
 # =====================
 @events_mgmt_bp.route("/events/import/execute", methods=["POST"])
 def import_execute():
-    """
-    Import one or more sub_events from a preview result.
-    Each sub_event becomes its own Event record.
-    resolutions: {challonge_name: {action: "create"|"merge", player_id: int, name: str}}
-    """
     data = request.get_json()
     sub_events = data.get("sub_events", [])
     resolutions = data.get("resolutions", {})
@@ -525,7 +680,6 @@ def import_execute():
         matches = sub.get("matches", [])
         unique_rounds = sub.get("unique_rounds", [])
 
-        # Check for existing event
         existing = Event.query.filter_by(bracketSlug=slug).first() if slug else None
 
         if existing and not reimport:
@@ -533,7 +687,6 @@ def import_execute():
             continue
 
         if existing and reimport:
-            # Delete existing sets for this event
             for s in MatchSet.query.filter_by(eventID=existing.id).all():
                 db.session.delete(s)
             db.session.flush()
@@ -551,35 +704,128 @@ def import_execute():
             db.session.add(event)
             db.session.flush()
 
-        # Look up already-matched players
+        # Pre-cache already-matched players for all names in this sub_event
+        all_names = set()
         for m in matches:
-            for name in [m["p1_name"], m["p2_name"]]:
-                if name not in player_cache:
-                    p = find_player_by_name_or_alias(name)
-                    if p:
-                        player_cache[name] = p
+            if m.get("mode") == "doubles":
+                all_names.update([m["t1p1_name"], m["t1p2_name"], m["t2p1_name"], m["t2p2_name"]])
+            else:
+                all_names.update([m["p1_name"], m["p2_name"]])
+
+        for name in all_names:
+            if name and name not in player_cache:
+                p = find_player_by_name_or_alias(name)
+                if p:
+                    player_cache[name] = p
 
         imported = 0
         skipped = 0
 
         for m in matches:
-            p1 = player_cache.get(m["p1_name"])
-            p2 = player_cache.get(m["p2_name"])
-            winner = player_cache.get(m["winner_name"]) if m.get("winner_name") else None
+            mode = m.get("mode", "singles")
 
-            if not p1 or not p2:
-                skipped += 1
-                continue
+            if mode == "singles":
+                p1 = player_cache.get(m["p1_name"])
+                p2 = player_cache.get(m["p2_name"])
+                winner = player_cache.get(m["winner_name"]) if m.get("winner_name") else None
 
-            match_set = MatchSet(
-                eventID=event.id,
-                bracketRound=m["round"],
-                player1ID=p1.id,
-                player2ID=p2.id,
-                winnerID=winner.id if winner else None,
-            )
-            db.session.add(match_set)
-            imported += 1
+                if not p1 or not p2:
+                    skipped += 1
+                    continue
+
+                match_set = MatchSet(
+                    eventID=event.id,
+                    bracketRound=m["round"],
+                    mode="singles",
+                    player1ID=p1.id,
+                    player2ID=p2.id,
+                    winnerID=winner.id if winner else None,
+                )
+                db.session.add(match_set)
+                db.session.flush()
+
+                # Create dummy game rows from score if available
+                score1 = m.get("score1")
+                score2 = m.get("score2")
+                if winner and score1 is not None and score2 is not None:
+                    loser = p2 if winner.id == p1.id else p1
+                    winner_score = score1 if winner.id == p1.id else score2
+                    loser_score = score2 if winner.id == p1.id else score1
+                    create_dummy_games(match_set, [winner], [loser], winner_score, loser_score)
+
+                imported += 1
+
+            elif mode == "doubles":
+                t1p1 = player_cache.get(m["t1p1_name"])
+                t1p2 = player_cache.get(m["t1p2_name"])
+                t2p1 = player_cache.get(m["t2p1_name"])
+                t2p2 = player_cache.get(m["t2p2_name"])
+
+                if not t1p1 or not t1p2 or not t2p1 or not t2p2:
+                    skipped += 1
+                    continue
+
+                # Create fresh ephemeral teams for this event
+                team1 = Team(
+                    name=m["p1_name"],  # p1_name = team1 name for doubles
+                    eventID=event.id,
+                    player1ID=t1p1.id,
+                    player2ID=t1p2.id,
+                )
+                team2 = Team(
+                    name=m["p2_name"],  # p2_name = team2 name for doubles
+                    eventID=event.id,
+                    player1ID=t2p1.id,
+                    player2ID=t2p2.id,
+                )
+                db.session.add(team1)
+                db.session.add(team2)
+                db.session.flush()
+
+                # Determine winning team
+                winner_team_id = None
+                if m.get("winner_name"):
+                    if m["winner_name"] == m["p1_name"]:
+                        winner_team_id = team1.id
+                    elif m["winner_name"] == m["p2_name"]:
+                        winner_team_id = team2.id
+
+                match_set = MatchSet(
+                    eventID=event.id,
+                    bracketRound=m["round"],
+                    mode="doubles",
+                    team1ID=team1.id,
+                    team2ID=team2.id,
+                    winnerTeamID=winner_team_id,
+                )
+                db.session.add(match_set)
+                db.session.flush()
+
+                # Create dummy game rows from score if available
+                score1 = m.get("score1")
+                score2 = m.get("score2")
+                if winner_team_id and score1 is not None and score2 is not None:
+                    winner_team = team1 if winner_team_id == team1.id else team2
+                    loser_team = team2 if winner_team_id == team1.id else team1
+                    w_score = score1 if winner_team_id == team1.id else score2
+                    l_score = score2 if winner_team_id == team1.id else score1
+                    winner_players = [
+                        player_cache.get(m["t1p1_name"] if winner_team_id == team1.id else m["t2p1_name"]),
+                        player_cache.get(m["t1p2_name"] if winner_team_id == team1.id else m["t2p2_name"]),
+                    ]
+                    loser_players = [
+                        player_cache.get(m["t2p1_name"] if winner_team_id == team1.id else m["t1p1_name"]),
+                        player_cache.get(m["t2p2_name"] if winner_team_id == team1.id else m["t1p2_name"]),
+                    ]
+                    winner_players = [p for p in winner_players if p]
+                    loser_players = [p for p in loser_players if p]
+                    if winner_players and loser_players:
+                        create_dummy_games(
+                            match_set, winner_players, loser_players, w_score, l_score,
+                            winner_team_id=winner_team.id, loser_team_id=loser_team.id
+                        )
+
+                imported += 1
 
         results.append({
             "title": title,
@@ -599,7 +845,7 @@ def import_execute():
     })
 
 # =====================
-# Legacy Challonge routes (keep for backwards compat)
+# Legacy Challonge routes (backwards compat)
 # =====================
 @events_mgmt_bp.route("/events/challonge/preview", methods=["POST"])
 def challonge_preview_legacy():
@@ -607,7 +853,6 @@ def challonge_preview_legacy():
 
 @events_mgmt_bp.route("/events/challonge/import", methods=["POST"])
 def challonge_import_legacy():
-    # Map old format to new format
     data = request.get_json()
     matches = data.get("matches", [])
     new_data = {
@@ -620,7 +865,6 @@ def challonge_import_legacy():
         "resolutions": data.get("resolutions", {}),
         "reimport": data.get("reimport", False),
     }
-    # Temporarily replace request data
     from flask import g
     g._import_data = new_data
     return import_execute()

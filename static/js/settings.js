@@ -110,5 +110,69 @@ function showToast(msg, type = "") {
     clearTimeout(toast._t);
     toast._t = setTimeout(() => { toast.style.opacity = "0"; toast.style.transform = "translateY(8px)"; }, 3000);
 }
+// =====================
+// Data Sync
+// =====================
+async function initSync() {
+    const res = await fetch("/api/sync/status").then(r => r.json());
+    const cfg = await fetch("/api/sync/config").then(r => r.json());
+
+    document.getElementById("sync-repo").value = cfg.repo || "";
+    document.getElementById("sync-branch").value = cfg.branch || "main";
+    document.getElementById("sync-token").value = cfg.github_token || "";
+    document.getElementById("sync-auto").checked = cfg.auto_sync || false;
+
+    if (res.last_export) {
+        const d = new Date(res.last_export);
+        document.getElementById("sync-status").style.display = "flex";
+        document.getElementById("sync-status-label").textContent =
+            `Last synced: ${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
+    }
+    if (res.configured) {
+        document.getElementById("sync-status").style.display = "flex";
+    }
+}
+
+document.getElementById("sync-token-toggle").addEventListener("click", () => {
+    const input = document.getElementById("sync-token");
+    input.type = input.type === "password" ? "text" : "password";
+});
+
+document.getElementById("sync-save-btn").addEventListener("click", async () => {
+    const repo = document.getElementById("sync-repo").value.trim();
+    const branch = document.getElementById("sync-branch").value.trim() || "main";
+    const token = document.getElementById("sync-token").value.trim();
+    const auto_sync = document.getElementById("sync-auto").checked;
+
+    await fetch("/api/sync/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ github_repo: repo, github_branch: branch, github_token: token, auto_sync })
+    });
+    showToast("Sync config saved", "success");
+});
+
+document.getElementById("sync-now-btn").addEventListener("click", async () => {
+    const btn = document.getElementById("sync-now-btn");
+    btn.textContent = "Syncing...";
+    btn.disabled = true;
+
+    const res = await fetch("/api/sync/push", { method: "POST" }).then(r => r.json());
+
+    btn.textContent = "↑ Sync Now";
+    btn.disabled = false;
+
+    if (res.ok) {
+        const d = new Date(res.exportedAt);
+        document.getElementById("sync-status").style.display = "flex";
+        document.getElementById("sync-status-label").textContent =
+            `Last synced: ${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
+        showToast(res.message, "success");
+    } else {
+        showToast(res.error || "Sync failed", "error");
+    }
+});
+
+initSync();
 
 init();

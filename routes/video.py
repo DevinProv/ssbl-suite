@@ -16,6 +16,7 @@ YT_TOKEN_PATH = os.path.join(BASE_DIR, "static", "youtube_token.json")
 DEFAULT_VIDEO_CONFIG = {
     "title_template": "[Event] - [Round] - [P1] vs [P2]",
     "output_subdir": "cutsets",
+    "yt_redirect_uri": "http://localhost:5000/api/video/auth/callback",
 }
 
 def load_video_config():
@@ -151,6 +152,8 @@ def set_video_config():
         cfg["title_template"] = data["title_template"]
     if "output_subdir" in data:
         cfg["output_subdir"] = data["output_subdir"]
+    if "yt_redirect_uri" in data:
+        cfg["yt_redirect_uri"] = data["yt_redirect_uri"]
     save_video_config(cfg)
     return jsonify({"ok": True})
 
@@ -262,16 +265,6 @@ def cut_bulk():
 # =====================
 YT_SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 
-def get_yt_flow():
-    from google_auth_oauthlib.flow import Flow
-    if not os.path.exists(YT_CREDENTIALS_PATH):
-        return None
-    return Flow.from_client_secrets_file(
-        YT_CREDENTIALS_PATH,
-        scopes=YT_SCOPES,
-        redirect_uri="http://localhost:5000/api/video/auth/callback"
-    )
-
 @video_bp.route("/video/auth/status", methods=["GET"])
 def yt_auth_status():
     if not os.path.exists(YT_CREDENTIALS_PATH):
@@ -280,21 +273,49 @@ def yt_auth_status():
         return jsonify({"authenticated": False})
     return jsonify({"authenticated": True})
 
+# Store flow state between auth start and callback
+_yt_flow_store = {}
+
 @video_bp.route("/video/auth/youtube")
 def yt_auth_start():
-    flow = get_yt_flow()
-    if not flow:
-        return "youtube_credentials.json not found in static/", 400
-    auth_url, state = flow.authorization_url(access_type="offline", prompt="consent")
-    session["yt_state"] = state
-    return redirect(auth_url)
+    if not os.path.exists(YT_CREDENTIALS_PATH):
+        return jsonify({"error": "youtube_credentials.json not found"}), 400
+
+    from google_auth_oauthlib.flow import Flow
+    cfg = load_video_config()
+    redirect_uri = cfg.get("yt_redirect_uri", "http://localhost:5000/api/video/auth/callback")
+
+    flow = Flow.from_client_secrets_file(
+        YT_CREDENTIALS_PATH,
+        scopes=YT_SCOPES,
+        redirect_uri=redirect_uri,
+    )
+    auth_url, state = flow.authorization_url(
+        access_type="offline",
+        prompt="consent",
+    )
+
+    # Store flow keyed by state so callback can retrieve it
+    _yt_flow_store[state] = flow
+
+    return jsonify({"ok": True, "auth_url": auth_url})
 
 @video_bp.route("/video/auth/callback")
 def yt_auth_callback():
-    flow = get_yt_flow()
+    state = request.args.get("state")
+    flow = _yt_flow_store.pop(state, None)
     if not flow:
-        return "Missing credentials", 400
-    flow.fetch_token(authorization_response=request.url)
+        return "Auth session expired or invalid. Please try again.", 400
+
+    callback_url = request.url
+    if callback_url.startswith("https://"):
+        callback_url = "http://" + callback_url[8:]
+
+    try:
+        flow.fetch_token(authorization_response=callback_url)
+    except Exception as e:
+        return f"Token exchange failed: {e}", 400
+
     creds = flow.credentials
     with open(YT_TOKEN_PATH, "w") as f:
         json.dump({
@@ -305,7 +326,14 @@ def yt_auth_callback():
             "client_secret": creds.client_secret,
             "scopes": list(creds.scopes or YT_SCOPES)
         }, f, indent=2)
-    return redirect("/video")
+
+    print("[YouTube] Auth complete, token saved.")
+    # Return a page that closes itself and tells the user to go back
+    return """<html><body style="font-family:sans-serif;text-align:center;padding:60px;background:#1a1c1e;color:#f0f0f2">
+        <h2>✅ YouTube Connected!</h2>
+        <p>You can close this tab and return to the SSBL app.</p>
+        <script>setTimeout(() => window.close(), 2000);</script>
+    </body></html>"""
 
 @video_bp.route("/video/auth/revoke", methods=["POST"])
 def yt_auth_revoke():
@@ -365,8 +393,11 @@ def upload_set(set_id):
     clip = ClipExport.query.filter_by(setID=set_id).first()
     if not clip:
         return jsonify({"error": "No clip — cut first"}), 400
-    if clip.status != "cut":
+    # Allow retry if clip was cut but upload previously failed and file still exists
+    if clip.status not in ("cut", "failed"):
         return jsonify({"error": f"Not ready (status: {clip.status})"}), 400
+    if clip.status == "failed" and not os.path.exists(clip.output_path or ""):
+        return jsonify({"error": "Clip file missing — cut again first"}), 400
     clip.status = "uploading"
     db.session.commit()
     threading.Thread(target=_upload_to_youtube, args=(flask_app, set_id), daemon=True).start()
@@ -380,7 +411,7 @@ def upload_bulk():
     queued = []
     for sid in set_ids:
         clip = ClipExport.query.filter_by(setID=sid).first()
-        if clip and clip.status == "cut":
+        if clip and clip.status in ("cut", "failed") and os.path.exists(clip.output_path or ""):
             clip.status = "uploading"
             queued.append(sid)
     db.session.commit()

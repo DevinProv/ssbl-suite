@@ -13,4 +13,12 @@ venv/
 *.swp
 .DS_Store
 repomix-output.xml
-static/*.json
+static/sync_config.json
+static/obs_config.json
+static/overlay_config.json
+static/video_config.json
+static/round_mapping.json
+static/startgg_config.json
+static/youtube_credentials.json
+static/youtube_token.json
+static/export/
