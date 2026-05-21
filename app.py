@@ -5,6 +5,7 @@ import json
 import threading
 import urllib.request
 import ssl
+import hashlib
 from flask import Flask, render_template, jsonify, request
 from flask_sock import Sock
 from database import db
@@ -12,7 +13,19 @@ from routes import players_bp, events_bp, sets_bp, characters_bp, obs_bp, settin
 from routes.overlay import overlay_bp, broadcast_scene_change
 from config import get_active_theme, get_obs_config
 
-ssl._create_default_https_context = ssl._create_unverified_context
+# Make HTTPS certificate verification work inside the PyInstaller bundle (where
+# the system trust store is often unavailable) WITHOUT disabling validation.
+try:
+    import certifi
+    _CA_FILE = certifi.where()
+except Exception:
+    _CA_FILE = None
+
+def _make_ssl_context():
+    return ssl.create_default_context(cafile=_CA_FILE)
+
+ssl._create_default_https_context = _make_ssl_context
+
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
 
@@ -125,14 +138,69 @@ def overlay_ws(ws):
 # =====================
 # Auto-update logic
 # =====================
+def _version_parts(v):
+    """Parse a dotted version into a list of leading-integer components."""
+    out = []
+    for chunk in v.lstrip("v").split("."):
+        digits = ""
+        for ch in chunk:
+            if ch.isdigit():
+                digits += ch
+            else:
+                break
+        out.append(int(digits) if digits else 0)
+    return out
+
 def _version_is_newer(latest_str, current_str):
-    """Return True if latest > current. Falls back to string compare."""
+    """Return True if latest > current."""
     if HAS_PACKAGING:
         try:
             return pkg_version.parse(latest_str) > pkg_version.parse(current_str)
         except Exception:
             pass
-    return latest_str.lstrip("v") != current_str.lstrip("v")
+    return _version_parts(latest_str) > _version_parts(current_str)
+
+def _fetch_text(url):
+    """Fetch a small text resource (e.g. a checksum file) over verified HTTPS."""
+    req = urllib.request.Request(url, headers={"User-Agent": "SSBL-App"})
+    with urllib.request.urlopen(req, timeout=10, context=_make_ssl_context()) as r:
+        return r.read().decode("utf-8", "replace")
+
+def _parse_sha256(text, filename):
+    """Pull the expected hex digest for `filename` out of a checksum file.
+
+    Handles both a bare-digest sidecar and multi-entry `<hash>  <name>` files.
+    """
+    target = os.path.basename(filename).lower()
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    for ln in lines:
+        parts = ln.split()
+        if len(parts) >= 2:
+            name = os.path.basename(parts[-1].lstrip("*")).lower()
+            if name == target:
+                return parts[0].lower()
+    if len(lines) == 1:
+        token = lines[0].split()[0].lower()
+        if len(token) == 64 and all(c in "0123456789abcdef" for c in token):
+            return token
+    return None
+
+def _expected_sha256_for(asset_name, assets):
+    """Locate and parse a published SHA-256 for the given release asset."""
+    sidecar = next(
+        (a for a in assets if a["name"].lower() == f"{asset_name}.sha256".lower()),
+        None,
+    )
+    if not sidecar:
+        sidecar = next(
+            (a for a in assets if a["name"].lower() in (
+                "sha256sums", "sha256sums.txt", "checksums.txt", "checksums.sha256",
+            )),
+            None,
+        )
+    if not sidecar:
+        return None
+    return _parse_sha256(_fetch_text(sidecar["browser_download_url"]), asset_name)
 
 def check_for_update():
     """Background thread: check GitHub Releases for a newer exe."""
@@ -153,14 +221,23 @@ def check_for_update():
             print("[Update] No exe asset found in release")
             return
 
-        print(f"[Update] New version {latest} found — downloading...")
-        _do_update(exe_asset["browser_download_url"], latest)
+        # Require a published checksum so we never execute an unverified binary.
+        expected_sha = _expected_sha256_for(exe_asset["name"], assets)
+        if not expected_sha:
+            print("[Update] No SHA-256 checksum published for the release asset — "
+                  "refusing to auto-update.")
+            print("[Update] Publish '<exe>.sha256' or a 'SHA256SUMS' asset alongside "
+                  "the .exe to enable updates.")
+            return
+
+        print(f"[Update] New version {latest} found — downloading + verifying...")
+        _do_update(exe_asset["browser_download_url"], latest, expected_sha)
 
     except Exception as e:
         print(f"[Update] Check failed: {e}")
 
-def _do_update(download_url, latest_version):
-    """Download the new exe and stage a batch-swap script."""
+def _do_update(download_url, latest_version, expected_sha256):
+    """Download the new exe, verify its checksum, and stage a batch-swap script."""
     # Only meaningful when running as a PyInstaller bundle
     if not getattr(sys, "frozen", False):
         print(f"[Update] Running from source — skipping exe swap (would install {latest_version})")
@@ -173,7 +250,20 @@ def _do_update(download_url, latest_version):
     bat = os.path.join(os.path.dirname(current_exe), "_update.bat")
 
     try:
-        urllib.request.urlretrieve(download_url, new_exe)
+        # Stream over the verified SSL context, hashing as we go.
+        sha = hashlib.sha256()
+        req = urllib.request.Request(download_url, headers={"User-Agent": "SSBL-App"})
+        with urllib.request.urlopen(req, timeout=60, context=_make_ssl_context()) as r, \
+                open(new_exe, "wb") as out:
+            for chunk in iter(lambda: r.read(65536), b""):
+                out.write(chunk)
+                sha.update(chunk)
+
+        actual = sha.hexdigest().lower()
+        if actual != expected_sha256.lower():
+            raise ValueError(
+                f"checksum mismatch (expected {expected_sha256}, got {actual})"
+            )
 
         with open(bat, "w") as f:
             f.write(

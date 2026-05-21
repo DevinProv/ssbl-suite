@@ -3,7 +3,12 @@ name: Build Windows Executable
 on:
   push:
     branches:
-      - main  # Triggers the build whenever you push to the main branch
+      - main        # CI build + artifact on every push to main
+    tags:
+      - 'v*'        # pushing a version tag (e.g. v1.0.1) also publishes a Release
+
+permissions:
+  contents: write   # required for creating GitHub Releases
 
 jobs:
   build:
@@ -16,7 +21,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11' # Change this to match your target Python version
+        python-version: '3.11'
 
     - name: Install Dependencies
       run: |
@@ -25,10 +30,29 @@ jobs:
         pip install pyinstaller
 
     - name: Build with PyInstaller
-      run: pyinstaller --onefile app.py # Replace your_app.py with your main script name
+      run: pyinstaller --onefile app.py
 
-    - name: Upload Executable
+    - name: Generate SHA-256 checksum
+      shell: pwsh
+      run: |
+        $exe  = Get-ChildItem dist/*.exe | Select-Object -First 1
+        $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+        # Sidecar the in-app updater looks for: "<exe>.sha256", "<hash>  <name>" format
+        "$hash  $($exe.Name)" | Out-File -FilePath "$($exe.FullName).sha256" -Encoding ascii -NoNewline
+        Write-Host "SHA-256($($exe.Name)) = $hash"
+
+    - name: Upload Executable (artifact)
       uses: actions/upload-artifact@v4
       with:
         name: windows-executable
-        path: dist/*.exe
+        path: |
+          dist/*.exe
+          dist/*.exe.sha256
+
+    - name: Publish Release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          dist/*.exe
+          dist/*.exe.sha256
