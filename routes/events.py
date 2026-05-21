@@ -121,6 +121,28 @@ def delete_event(event_id):
     event = Event.query.get(event_id)
     if event is None:
         return jsonify({"error": "Event not found"}), 404
+
+    # Delete all sets under this event, cascading through games and participants.
+    # Also clean up Teams and ClipExports which have no SQLAlchemy cascade from Event.
+    from models import MatchSet, Game, GameParticipant, Team, ClipExport
+
+    sets = MatchSet.query.filter_by(eventID=event_id).all()
+    for s in sets:
+        # ClipExport has a unique=True FK to MatchSet but no cascade
+        clip = ClipExport.query.filter_by(setID=s.id).first()
+        if clip:
+            db.session.delete(clip)
+
+        # Games cascade to GameParticipant via the relationship on Game,
+        # but we need to hit them explicitly since Event→MatchSet has no cascade
+        for game in s.games:
+            db.session.delete(game)  # GameParticipant cascades via Game.participants
+
+        db.session.delete(s)
+
+    # Teams are per-event — delete them too
+    Team.query.filter_by(eventID=event_id).delete()
+
     db.session.delete(event)
     db.session.commit()
     return jsonify({"ok": True})

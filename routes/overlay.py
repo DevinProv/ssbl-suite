@@ -1,10 +1,15 @@
 from flask import Blueprint, jsonify, request, render_template
 import json
 import os
+import queue
+import threading
 
 overlay_bp = Blueprint("overlay", __name__)
 
 _connected_overlays = set()
+_overlays_lock = threading.Lock()   # guards _connected_overlays
+_broadcast_queue = queue.Queue()    # all WS sends go through here
+
 _current_state = {
     "player1": {"name": "Player 1", "char": "", "color": "", "score": 0},
     "player2": {"name": "Player 2", "char": "", "color": "", "score": 0},
@@ -90,9 +95,7 @@ def load_config():
             data = json.load(f)
         # Migrate old flat config to per-scene format
         if "elements" in data and "scenes" not in data:
-            scene_name = data.get("active_scene", "Default")
-            if not scene_name:
-                scene_name = "Default"
+            scene_name = data.get("active_scene", "Default") or "Default"
             migrated = {
                 "resolution": data.get("resolution", {"width": 1920, "height": 1080}),
                 "active_scene": scene_name,
@@ -111,52 +114,93 @@ def save_config(config):
         json.dump(config, f, indent=2)
 
 def get_scene_elements(config, scene_name):
-    """Get elements for a scene, creating default if not exists."""
     if scene_name not in config.get("scenes", {}):
         config.setdefault("scenes", {})[scene_name] = {
             "elements": DEFAULT_ELEMENTS.copy()
         }
     return config["scenes"][scene_name]["elements"]
 
+
+# =====================
+# Thread-safe broadcast worker
+# =====================
+def _broadcast_worker():
+    """
+    Runs in a dedicated daemon thread.  All WebSocket sends go through the
+    _broadcast_queue so that OBS callback threads (or any other non-WS thread)
+    never touch flask-sock sockets directly.
+    """
+    while True:
+        message = _broadcast_queue.get()        # blocks until work arrives
+        _do_broadcast(message)
+        _broadcast_queue.task_done()
+
+def _do_broadcast(message: str):
+    """Send *message* to every connected overlay; prune dead sockets."""
+    dead = set()
+    with _overlays_lock:
+        snapshot = set(_connected_overlays)
+
+    for ws in snapshot:
+        try:
+            ws.send(message)
+        except Exception:
+            dead.add(ws)
+
+    if dead:
+        with _overlays_lock:
+            _connected_overlays.difference_update(dead)
+
+def _enqueue(message: str):
+    """Thread-safe: any thread can call this."""
+    _broadcast_queue.put(message)
+
+# Start the worker once at import time.
+_worker_thread = threading.Thread(target=_broadcast_worker, daemon=True, name="overlay-broadcast")
+_worker_thread.start()
+
+
+# =====================
+# Public broadcast helpers (called from routes & OBS callback)
+# =====================
 def broadcast_state(state):
     global _current_state
     _current_state = state
-    dead = set()
-    for ws in _connected_overlays:
-        try:
-            ws.send(json.dumps({"type": "state", "data": state}))
-        except Exception:
-            dead.add(ws)
-    _connected_overlays.difference_update(dead)
+    _enqueue(json.dumps({"type": "state", "data": state}))
 
 def broadcast_config(config):
-    dead = set()
-    for ws in _connected_overlays:
-        try:
-            ws.send(json.dumps({"type": "config", "data": config}))
-        except Exception:
-            dead.add(ws)
-    _connected_overlays.difference_update(dead)
+    _enqueue(json.dumps({"type": "config", "data": config}))
 
-def broadcast_scene_change(scene_name):
-    """Push scene change to all overlay displays."""
+def broadcast_scene_change(scene_name: str):
+    """
+    Called from the OBS EventClient thread when the scene changes.
+    Safe to call from any thread.
+    """
     global _current_state
     _current_state["active_scene"] = scene_name
+
     config = load_config()
     config["active_scene"] = scene_name
-    save_config(config)
-    dead = set()
-    for ws in _connected_overlays:
-        try:
-            ws.send(json.dumps({
-                "type": "scene_change",
-                "scene": scene_name,
-                "data": config
-            }))
-        except Exception:
-            dead.add(ws)
-    _connected_overlays.difference_update(dead)
 
+    # Ensure the scene has a default element set so the editor never sees an
+    # empty canvas on first switch.
+    if scene_name and scene_name not in config.get("scenes", {}):
+        config.setdefault("scenes", {})[scene_name] = {
+            "elements": DEFAULT_ELEMENTS.copy()
+        }
+
+    save_config(config)
+
+    _enqueue(json.dumps({
+        "type": "scene_change",
+        "scene": scene_name,
+        "data": config,
+    }))
+
+
+# =====================
+# Routes
+# =====================
 @overlay_bp.route("/overlay")
 def overlay_editor():
     return render_template("overlay_editor.html")
@@ -178,7 +222,6 @@ def set_config():
 
 @overlay_bp.route("/api/overlay/scene/<scene_name>", methods=["POST"])
 def save_scene(scene_name):
-    """Save elements for a specific scene."""
     data = request.get_json()
     config = load_config()
     config.setdefault("scenes", {})[scene_name] = {"elements": data["elements"]}

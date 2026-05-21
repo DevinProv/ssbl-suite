@@ -113,6 +113,56 @@
             </div>
         </div>
     </div>
+    <!-- =============================================
+     ADD THESE TWO CARDS TO templates/settings.html
+     (paste before the closing </div> of settings-container)
+     ============================================= -->
+
+    <!-- ── Update Status Card ── -->
+    <div class="settings-card">
+        <h2>App Updates</h2>
+        <div class="settings-status" id="update-status-bar">
+            <span class="status-dot" id="update-dot"></span>
+            <span id="update-label">Checking for updates...</span>
+        </div>
+        <div class="settings-actions" id="update-actions" style="display:none">
+            <button id="apply-update-btn" class="btn-primary">Restart &amp; Update</button>
+        </div>
+        <p style="font-size:11px;color:var(--on-surface-dim)">
+            Current version: <span id="current-version">—</span>
+        </p>
+    </div>
+
+    <!-- ── Import from GitHub Card ── -->
+    <div class="settings-card">
+        <h2>Import from GitHub</h2>
+        <p style="font-size:12px;color:var(--on-surface-dim);line-height:1.6">
+            Pull data from your public GitHub data repo into this local database.
+            Uses the same repo configured in Data Sync above.
+            Existing records are updated; new records are created.
+        </p>
+        <div class="settings-form">
+            <div class="field-group">
+                <label>Repo (leave blank to use Data Sync repo)</label>
+                <input type="text" id="import-repo" placeholder="username/repo-name">
+            </div>
+            <div class="field-group">
+                <label>Branch</label>
+                <input type="text" id="import-branch" placeholder="main" value="main">
+            </div>
+
+            <!-- Preview summary (hidden until fetched) -->
+            <div id="import-preview-box" style="display:none;
+                background:var(--surface-2);border:1px solid var(--outline);
+                border-radius:8px;padding:12px;font-size:12px;line-height:1.8">
+            </div>
+
+            <div class="settings-actions">
+                <button id="import-preview-btn" class="btn-ghost">Preview</button>
+                <button id="import-execute-btn" class="btn-primary" style="display:none">Import Data</button>
+            </div>
+        </div>
+    </div>
 </div>
 <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
 {% endblock %}

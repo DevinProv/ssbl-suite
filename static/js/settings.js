@@ -174,5 +174,116 @@ document.getElementById("sync-now-btn").addEventListener("click", async () => {
 });
 
 initSync();
-
+// ── Update status ──────────────────────────────
+async function initUpdateStatus() {
+    try {
+        const res = await fetch("/api/update/status").then(r => r.json());
+        document.getElementById("current-version").textContent = res.current_version || "unknown";
+ 
+        const dot   = document.getElementById("update-dot");
+        const label = document.getElementById("update-label");
+        const acts  = document.getElementById("update-actions");
+ 
+        if (res.update_available) {
+            dot.className   = "status-dot connected";   // green
+            label.textContent = `Update available: v${res.new_version}`;
+            acts.style.display = "flex";
+        } else {
+            dot.className   = "status-dot";
+            label.textContent = "Up to date";
+        }
+    } catch(e) {
+        document.getElementById("update-label").textContent = "Could not check for updates";
+    }
+}
+ 
+document.getElementById("apply-update-btn")?.addEventListener("click", async () => {
+    if (!confirm("The app will close and restart to apply the update. Continue?")) return;
+    const res = await fetch("/api/update/apply", { method: "POST" }).then(r => r.json()).catch(() => null);
+    if (res?.error) showToast(res.error, "error");
+});
+ 
+// ── GitHub import ──────────────────────────────
+let _importData = null;
+ 
+document.getElementById("import-preview-btn").addEventListener("click", async () => {
+    const repo   = document.getElementById("import-repo").value.trim();
+    const branch = document.getElementById("import-branch").value.trim() || "main";
+    const btn    = document.getElementById("import-preview-btn");
+ 
+    btn.textContent = "Fetching...";
+    btn.disabled = true;
+    _importData = null;
+    document.getElementById("import-execute-btn").style.display = "none";
+ 
+    const res = await fetch("/api/import/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repo, branch }),
+    }).then(r => r.json());
+ 
+    btn.textContent = "Preview";
+    btn.disabled = false;
+ 
+    if (!res.ok) {
+        showToast(res.error || "Preview failed", "error");
+        return;
+    }
+ 
+    _importData = res.data;
+ 
+    const box = document.getElementById("import-preview-box");
+    const s   = res.summary;
+    const exp = res.meta?.exportedAt
+        ? new Date(res.meta.exportedAt).toLocaleString()
+        : "unknown";
+ 
+    box.innerHTML = `
+        <div style="margin-bottom:6px;font-weight:600;color:var(--on-surface)">
+            ${res.repo} @ ${res.branch}
+        </div>
+        <div style="color:var(--on-surface-dim)">Exported: ${exp}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:8px">
+            <span>👤 ${s.players} players</span>
+            <span>📅 ${s.events} events</span>
+            <span>🎮 ${s.sets} sets</span>
+            <span>🕹 ${s.games} games</span>
+        </div>
+    `;
+    box.style.display = "block";
+    document.getElementById("import-execute-btn").style.display = "block";
+});
+ 
+document.getElementById("import-execute-btn").addEventListener("click", async () => {
+    if (!_importData) { showToast("Preview first", "error"); return; }
+    if (!confirm("This will overwrite local records that match IDs in the import. Continue?")) return;
+ 
+    const btn = document.getElementById("import-execute-btn");
+    btn.textContent = "Importing...";
+    btn.disabled = true;
+ 
+    const res = await fetch("/api/import/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: _importData }),
+    }).then(r => r.json());
+ 
+    btn.textContent = "Import Data";
+    btn.disabled = false;
+ 
+    if (!res.ok) {
+        showToast(res.error || "Import failed", "error");
+        return;
+    }
+ 
+    const i = res.imported;
+    showToast(
+        `Imported: ${i.players} players, ${i.events} events, ${i.sets} sets, ${i.games} games`,
+        "success"
+    );
+    _importData = null;
+    document.getElementById("import-execute-btn").style.display = "none";
+});
+ 
+initUpdateStatus();
 init();

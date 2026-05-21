@@ -268,29 +268,49 @@ function setupImportModal() {
 
     document.getElementById("import-do-btn").addEventListener("click", () => {
         if (!previewResult) return;
+        const hasExisting = previewResult.sub_events.some(e => e.existing_event);
         if (previewResult.unmatched_names.length > 0) {
-            openResolutionModal(previewResult);
+            openResolutionModal(previewResult, hasExisting);
         } else {
-            doImport(previewResult, {}, false);
+            doImport(previewResult, {}, hasExisting);
         }
     });
 }
 
 function openImportModal() {
-    // Reset state
+    // Full reset every time
+    previewResult = null;
+    pendingImport = null;
+ 
     document.getElementById("import-url-input").value = "";
     document.getElementById("import-source-badge").textContent = "";
-    document.getElementById("import-step-preview").style.display = "none";
-    document.getElementById("import-step-preview").innerHTML = "";
-    document.getElementById("import-do-btn").style.display = "none";
-    previewResult = null;
+ 
+    const preview = document.getElementById("import-step-preview");
+    preview.style.display = "none";
+    preview.innerHTML = "";
+ 
+    const doBtn = document.getElementById("import-do-btn");
+    doBtn.style.display = "none";
+    doBtn.disabled = false;
+    doBtn.textContent = "Import All Events";
+ 
+    const previewBtn = document.getElementById("import-preview-btn");
+    previewBtn.textContent = "Preview";
+    previewBtn.disabled = false;
+ 
+    // Make sure resolution modal is closed too
+    document.getElementById("resolution-modal-overlay").classList.remove("open");
+ 
     document.getElementById("import-modal-overlay").classList.add("open");
 }
 
 function closeImportModal() {
     document.getElementById("import-modal-overlay").classList.remove("open");
-    previewResult = null;
+    document.getElementById("resolution-modal-overlay").classList.remove("open");
+    // State resets happen in openImportModal, not here,
+    // so resolution flow can still access previewResult if needed.
 }
+
 
 async function runPreview() {
     const url = document.getElementById("import-url-input").value.trim();
@@ -416,9 +436,18 @@ function setupResolutionModal() {
 }
 
 function openResolutionModal(data, reimport = false) {
+    if (!data) return;
+ 
+    // Nothing to resolve — go straight to import
+    if (!data.unmatched_names || data.unmatched_names.length === 0) {
+        doImport(data, {}, reimport || data.sub_events.some(e => e.existing_event));
+        return;
+    }
+ 
     pendingImport = { data, reimport };
+ 
+    // Rebuild player list fresh every time
     const list = document.getElementById("resolution-player-list");
-
     list.innerHTML = data.unmatched_names.map(name => `
         <div class="resolution-item" data-name="${escAttr(name)}">
             <div class="resolution-name">⚠ "${name}"</div>
@@ -435,24 +464,28 @@ function openResolutionModal(data, reimport = false) {
             </div>
         </div>
     `).join("");
-
+ 
     list.querySelectorAll(".resolution-mode-btn").forEach(btn => {
         btn.addEventListener("click", () => {
             const forName = btn.dataset.for;
             const item = list.querySelector(`.resolution-item[data-name="${CSS.escape(forName)}"]`);
             const mode = btn.dataset.mode;
-            item.querySelectorAll(".resolution-mode-btn").forEach(b => b.classList.toggle("selected", b.dataset.mode === mode));
+            item.querySelectorAll(".resolution-mode-btn").forEach(b =>
+                b.classList.toggle("selected", b.dataset.mode === mode));
             item.querySelector(".resolution-name-input").style.display = mode === "create" ? "block" : "none";
             item.querySelector(".resolution-merge-select").style.display = mode === "merge" ? "block" : "none";
         });
     });
-
+ 
     document.getElementById("resolution-modal-overlay").classList.add("open");
 }
+ 
+
 
 function closeResolutionModal() {
     document.getElementById("resolution-modal-overlay").classList.remove("open");
     pendingImport = null;
+    // Do NOT close the import modal — user might want to go back
 }
 
 async function confirmResolution() {
@@ -484,9 +517,9 @@ async function confirmResolution() {
 async function doImport(data, resolutions, reimport) {
     const doBtn = document.getElementById("import-do-btn");
     if (doBtn) { doBtn.textContent = "Importing..."; doBtn.disabled = true; }
-
+ 
     const hasExisting = data.sub_events.some(e => e.existing_event);
-
+ 
     const res = await fetch("/api/events/import/execute", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -496,25 +529,28 @@ async function doImport(data, resolutions, reimport) {
             reimport: reimport || hasExisting,
         })
     }).then(r => r.json());
-
+ 
     if (!res.ok) {
         showToast(res.error || "Import failed", "error");
-        if (doBtn) { doBtn.textContent = "Import"; doBtn.disabled = false; }
+        if (doBtn) { doBtn.textContent = "Import All Events"; doBtn.disabled = false; }
         return;
     }
-
+ 
     await fetchEvents();
-    await fetchPlayers(); // refresh aliases
-
-    // Select the first imported event
+    await fetchPlayers();
+ 
     const firstEventId = res.results[0]?.event_id;
     if (firstEventId) {
         const ev = allEvents.find(e => e.id === firstEventId);
         if (ev) selectEvent(ev);
     }
-
-    closeImportModal();
-
+ 
+    // Close both modals cleanly
+    document.getElementById("import-modal-overlay").classList.remove("open");
+    document.getElementById("resolution-modal-overlay").classList.remove("open");
+    previewResult = null;
+    pendingImport = null;
+ 
     const msg = res.events_created > 1
         ? `Imported ${res.total_imported} matches across ${res.events_created} events`
         : `Imported ${res.total_imported} matches`;
