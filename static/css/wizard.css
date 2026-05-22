@@ -1,0 +1,184 @@
+/* =====================
+   First-run setup wizard
+   (reuses .modal-overlay/.modal/.btn-* from modal.css + main.css)
+   ===================== */
+
+/* Step indicator */
+.wizard-steps {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 20px 0;
+}
+
+.wizard-steps .step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--on-surface-dim);
+}
+
+.wizard-steps .step .num {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--surface-2);
+    border: 1px solid var(--outline);
+    color: var(--on-surface-dim);
+}
+
+.wizard-steps .step.active .num {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--on-primary);
+}
+
+.wizard-steps .step.done .num {
+    background: var(--success);
+    border-color: var(--success);
+    color: var(--on-primary);
+}
+
+.wizard-steps .step.active { color: var(--on-surface); }
+
+.wizard-steps .divider {
+    flex: 1;
+    height: 1px;
+    background: var(--outline);
+}
+
+/* Steps */
+.wizard-step { display: none; }
+.wizard-step.active { display: block; }
+
+.wizard-step p.lead {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--on-surface-dim);
+    margin: 0 0 16px;
+}
+
+.wizard-path {
+    font-family: monospace;
+    font-size: 11px;
+    color: var(--on-surface-dim);
+    background: var(--surface-2);
+    border: 1px solid var(--outline);
+    border-radius: 6px;
+    padding: 6px 8px;
+    word-break: break-all;
+    margin-bottom: 16px;
+}
+
+/* Status dot (settings.css isn't loaded on the dashboard) */
+.wiz-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--on-surface-dim);
+    display: inline-block;
+    flex-shrink: 0;
+}
+.wiz-dot.connected { background: var(--success); }
+.wiz-dot.error     { background: var(--danger); }
+
+.wiz-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--on-surface);
+    margin: 4px 0 16px;
+}
+
+/* Download progress */
+.wizard-progress {
+    height: 8px;
+    border-radius: 6px;
+    background: var(--surface-2);
+    border: 1px solid var(--outline);
+    overflow: hidden;
+    margin: 14px 0 8px;
+}
+.wizard-progress > .bar {
+    height: 100%;
+    width: 0%;
+    background: var(--primary);
+    transition: width 0.2s;
+}
+.wizard-progress-label {
+    font-size: 12px;
+    color: var(--on-surface-dim);
+    margin-bottom: 8px;
+}
+
+/* OBS form */
+.wizard-field { margin-bottom: 12px; }
+.wizard-field label {
+    display: block;
+    font-size: 12px;
+    color: var(--on-surface-dim);
+    margin-bottom: 4px;
+}
+.wizard-field input {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--surface-2);
+    border: 1px solid var(--outline);
+    border-radius: 8px;
+    padding: 9px 11px;
+    color: var(--on-surface);
+    font-size: 13px;
+}
+.wizard-field input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.wizard-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* "?" help toggle + panel */
+.wizard-help-btn {
+    background: var(--surface-2);
+    border: 1px solid var(--outline);
+    color: var(--on-surface-dim);
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+}
+.wizard-help-btn:hover { color: var(--on-surface); border-color: var(--primary); }
+
+.wizard-help {
+    display: none;
+    background: var(--surface-2);
+    border: 1px solid var(--outline);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin: 12px 0 4px;
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: var(--on-surface-dim);
+}
+.wizard-help.open { display: block; }
+.wizard-help ol { margin: 6px 0 0; padding-left: 18px; }
+.wizard-help li { margin-bottom: 6px; }
+.wizard-help strong { color: var(--on-surface); }
+.wizard-help code {
+    background: var(--surface-3);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 11.5px;
+}

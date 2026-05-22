@@ -9,7 +9,7 @@ import hashlib
 from flask import Flask, render_template, jsonify, request
 from flask_sock import Sock
 from database import db
-from routes import players_bp, events_bp, sets_bp, characters_bp, obs_bp, settings_bp, video_bp, events_mgmt_bp, export_bp
+from routes import players_bp, events_bp, sets_bp, characters_bp, obs_bp, settings_bp, video_bp, events_mgmt_bp, export_bp, setup_bp
 from routes.overlay import overlay_bp, broadcast_scene_change
 from config import get_active_theme, get_obs_config
 from paths import resource_path, user_data_path, seed_user_data, FROZEN
@@ -74,6 +74,7 @@ app.register_blueprint(overlay_bp)
 app.register_blueprint(video_bp, url_prefix="/api")
 app.register_blueprint(events_mgmt_bp, url_prefix="/api")
 app.register_blueprint(export_bp, url_prefix="/api")
+app.register_blueprint(setup_bp, url_prefix="/api")
 
 @app.context_processor
 def inject_theme():

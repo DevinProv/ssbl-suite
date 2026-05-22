@@ -2,6 +2,7 @@
 {% block title %}Dashboard{% endblock %}
 {% block styles %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css')}}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/wizard.css') }}">
 {% endblock %}
 {% block content %}
     <div class="container">
@@ -148,5 +149,95 @@
         <div id="match-area"></div>
     </div>
 
+    <!-- ===================== First-run Setup Wizard ===================== -->
+    <div class="modal-overlay" id="wizard-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title">Welcome — Quick Setup</span>
+                <button class="modal-close" id="wizard-close" title="Skip setup">✕</button>
+            </div>
+
+            <div class="wizard-steps">
+                <div class="step active" data-step="1"><span class="num">1</span> Character Art</div>
+                <div class="divider"></div>
+                <div class="step" data-step="2"><span class="num">2</span> Connect OBS</div>
+            </div>
+
+            <div class="modal-body">
+                <!-- Step 1: character art -->
+                <div class="wizard-step active" id="wizard-step-1">
+                    <div id="wiz-images-missing">
+                        <p class="lead">
+                            No character art was found. Download the art pack and it'll be
+                            unpacked automatically into your images folder:
+                        </p>
+                        <div class="wizard-path" id="wiz-images-dir"></div>
+                        <button class="btn-primary" id="wiz-download-btn">Download art pack</button>
+                        <div class="wizard-progress" id="wiz-progress" style="display:none"><div class="bar"></div></div>
+                        <div class="wizard-progress-label" id="wiz-progress-label"></div>
+                        <p class="lead" style="margin-top:14px">
+                            Already have art? <a href="#" id="wiz-skip-images" style="color:var(--primary)">Skip this step</a>.
+                        </p>
+                    </div>
+                    <div id="wiz-images-present" style="display:none">
+                        <div class="wiz-status">
+                            <span class="wiz-dot connected"></span>
+                            <span id="wiz-images-present-text">Character art is installed.</span>
+                        </div>
+                        <p class="lead">You're set here — continue to connect OBS.</p>
+                    </div>
+                </div>
+
+                <!-- Step 2: OBS -->
+                <div class="wizard-step" id="wizard-step-2">
+                    <p class="lead">
+                        Connect to OBS so the app can read your active scene and push the overlay.
+                        Enter your OBS WebSocket details below.
+                    </p>
+                    <div class="wizard-field">
+                        <label>Host</label>
+                        <input type="text" id="wiz-obs-host" placeholder="localhost">
+                    </div>
+                    <div class="wizard-field">
+                        <label>Port</label>
+                        <input type="number" id="wiz-obs-port" placeholder="4455">
+                    </div>
+                    <div class="wizard-field">
+                        <div class="wizard-label-row">
+                            <label>Password</label>
+                            <button class="wizard-help-btn" id="wiz-obs-help-btn" title="How do I find this?">?</button>
+                        </div>
+                        <input type="password" id="wiz-obs-password" placeholder="OBS WebSocket password">
+                    </div>
+
+                    <div class="wizard-help" id="wiz-obs-help">
+                        <strong>Enable OBS WebSocket &amp; get the password</strong>
+                        <ol>
+                            <li>In OBS, open <strong>Tools → WebSocket Server Settings</strong>. (Built in to OBS 28+; older versions need the obs-websocket plugin.)</li>
+                            <li>Tick <strong>Enable WebSocket server</strong>. Leave <strong>Server Port</strong> at <code>4455</code> unless you've changed it.</li>
+                            <li>Keep <strong>Enable Authentication</strong> on, then click <strong>Show Connect Info</strong> (or <strong>Generate Password</strong>) to reveal the password.</li>
+                            <li>Copy the password into the field above. Use <code>localhost</code> as the host if OBS is on this same PC.</li>
+                            <li>Click <strong>Apply</strong> / <strong>OK</strong> in OBS, then hit <strong>Connect</strong> here.</li>
+                        </ol>
+                    </div>
+
+                    <div class="wiz-status">
+                        <span class="wiz-dot" id="wiz-obs-dot"></span>
+                        <span id="wiz-obs-label">Not connected</span>
+                    </div>
+                    <button class="btn-primary" id="wiz-obs-connect">Connect</button>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-ghost" id="wiz-skip" style="margin-right:auto">Skip setup</button>
+                <button class="btn-ghost" id="wiz-back" style="display:none">Back</button>
+                <button class="btn-primary" id="wiz-next">Next</button>
+                <button class="btn-primary" id="wiz-finish" style="display:none">Finish</button>
+            </div>
+        </div>
+    </div>
+
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/wizard.js') }}"></script>
 {% endblock %}
