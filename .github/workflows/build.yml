@@ -32,8 +32,10 @@ jobs:
     - name: Build with PyInstaller
       # Bundle templates + static into the exe (Windows --add-data uses ';').
       # Without this the frozen app can't find dashboard.html and 500s.
+      # --name gives the release asset a clear, platform-specific filename;
+      # it still ends in .exe so the in-app updater keeps recognizing it.
       run: >
-        pyinstaller --onefile --noconfirm
+        pyinstaller --onefile --noconfirm --name SSBL-Suite-Windows
         --add-data "templates;templates"
         --add-data "static;static"
         --hidden-import simple_websocket
@@ -77,7 +79,7 @@ jobs:
     - name: Build with PyInstaller
       # Linux --add-data uses ':' as the separator (not ';' like Windows).
       run: >
-        pyinstaller --onefile --noconfirm
+        pyinstaller --onefile --noconfirm --name SSBL-Suite-Linux
         --add-data "templates:templates"
         --add-data "static:static"
         --hidden-import simple_websocket
@@ -86,17 +88,16 @@ jobs:
     - name: Generate SHA-256 checksum
       run: |
         cd dist
-        # onefile build produces ./app (no extension on Linux)
-        sha256sum app > app.sha256
-        cat app.sha256
+        sha256sum SSBL-Suite-Linux > SSBL-Suite-Linux.sha256
+        cat SSBL-Suite-Linux.sha256
 
     - name: Upload Linux artifact
       uses: actions/upload-artifact@v4
       with:
         name: linux-build
         path: |
-          dist/app
-          dist/app.sha256
+          dist/SSBL-Suite-Linux
+          dist/SSBL-Suite-Linux.sha256
 
   release:
     needs: [build-windows, build-linux]
@@ -113,8 +114,21 @@ jobs:
     - name: Publish Release
       uses: softprops/action-gh-release@v2
       with:
+        generate_release_notes: true   # append an auto changelog below the body
+        body: |
+          ## Downloads
+
+          **Windows**
+          1. Download **both** `SSBL-Suite-Windows.exe` **and** `SSBL-Suite-Windows.exe.sha256` into the **same folder**.
+          2. Double-click `SSBL-Suite-Windows.exe`, then open <http://localhost:5000>.
+
+          **Linux**
+          1. Download **both** `SSBL-Suite-Linux` **and** `SSBL-Suite-Linux.sha256` into the **same folder**.
+          2. `chmod +x SSBL-Suite-Linux && ./SSBL-Suite-Linux`, then open <http://localhost:5000>.
+
+          > Keep the `.sha256` next to its binary — it's the published checksum so you can verify your download is intact and authentic.
         files: |
           dist/*.exe
           dist/*.exe.sha256
-          dist/app
-          dist/app.sha256
+          dist/SSBL-Suite-Linux
+          dist/SSBL-Suite-Linux.sha256

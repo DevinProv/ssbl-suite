@@ -14,14 +14,15 @@ browser at **http://localhost:5000**.
 
 ### Option A — download the build (recommended)
 
-1. Grab the latest release from the [Releases page](https://github.com/DevinProv/ssbl-suite/releases):
-   - **Windows:** `app.exe`
-   - **Linux:** `app` (plus `app.sha256`)
-2. Put it in its own folder — the app writes its database, configs, and the
+1. From the [Releases page](https://github.com/DevinProv/ssbl-suite/releases),
+   download **both** the binary **and** its `.sha256` into the **same folder**:
+   - **Windows:** `SSBL-Suite-Windows.exe` + `SSBL-Suite-Windows.exe.sha256`
+   - **Linux:** `SSBL-Suite-Linux` + `SSBL-Suite-Linux.sha256`
+2. Keep them in their own folder — the app writes its database, configs, and the
    `images/` art folder **next to the executable**.
 3. Run it:
-   - **Windows:** double-click `app.exe`.
-   - **Linux:** `chmod +x app && ./app`
+   - **Windows:** double-click `SSBL-Suite-Windows.exe`.
+   - **Linux:** `chmod +x SSBL-Suite-Linux && ./SSBL-Suite-Linux`
 4. Open **http://localhost:5000** in your browser.
 
 > On first launch a **Setup Wizard** appears to download character art and
@@ -143,7 +144,7 @@ is found it downloads and verifies it in the background, then shows an
 > **Restart & Update** once to move up to v1.0.5+. From then on, restarts apply
 > staged updates automatically.
 
-On **Linux**, re-download the latest `app` from the Releases page.
+On **Linux**, re-download the latest `SSBL-Suite-Linux` from the Releases page.
 
 Releases are published automatically when a `v*` tag is pushed, and every build
 ships a SHA-256 checksum the updater verifies before installing.
