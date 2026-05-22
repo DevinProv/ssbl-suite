@@ -267,11 +267,49 @@ YT_SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 
 @video_bp.route("/video/auth/status", methods=["GET"])
 def yt_auth_status():
+    cfg = load_video_config()
+    info = {
+        "credentials_path": YT_CREDENTIALS_PATH,
+        "redirect_uri": cfg.get("yt_redirect_uri",
+                                "http://localhost:5000/api/video/auth/callback"),
+    }
     if not os.path.exists(YT_CREDENTIALS_PATH):
-        return jsonify({"authenticated": False, "error": "no_credentials"})
+        return jsonify({"authenticated": False, "error": "no_credentials", **info})
     if not os.path.exists(YT_TOKEN_PATH):
-        return jsonify({"authenticated": False})
-    return jsonify({"authenticated": True})
+        return jsonify({"authenticated": False, **info})
+    return jsonify({"authenticated": True, **info})
+
+
+@video_bp.route("/video/auth/credentials", methods=["POST"])
+def yt_upload_credentials():
+    """Save a Google OAuth client-secret JSON (downloaded from the Google Cloud
+    Console) so the Connect-YouTube flow can use it. Accepts a multipart file
+    upload (field ``file``) or a raw/pasted JSON body."""
+    f = request.files.get("file")
+    raw = f.read() if f else request.get_data()
+    if not raw:
+        return jsonify({"error": "No file or JSON provided"}), 400
+
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return jsonify({"error": "That file isn't valid JSON. Download the OAuth "
+                                 "client JSON from Google Cloud Console and try again."}), 400
+
+    # Google client-secret files wrap the config under "web" (Web application)
+    # or "installed" (Desktop app); both expose client_id/client_secret.
+    section = data.get("web") or data.get("installed")
+    if not section or not section.get("client_id") or not section.get("client_secret"):
+        return jsonify({"error": "This doesn't look like an OAuth client JSON "
+                                 "(no 'web'/'installed' section with a client_id). "
+                                 "Make sure you downloaded the OAuth Client ID "
+                                 "credentials, not an API key."}), 400
+
+    os.makedirs(os.path.dirname(YT_CREDENTIALS_PATH), exist_ok=True)
+    with open(YT_CREDENTIALS_PATH, "w") as out:
+        json.dump(data, out, indent=2)
+
+    return jsonify({"ok": True, "type": "web" if "web" in data else "installed"})
 
 # Store flow state between auth start and callback
 _yt_flow_store = {}

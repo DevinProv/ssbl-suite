@@ -33,9 +33,7 @@
         <span class="yt-auth-label" id="yt-label">Checking YouTube...</span>
         <button class="btn-ghost" id="yt-auth-btn" style="display:none">Connect YouTube</button>
         <button class="btn-ghost" id="yt-revoke-btn" style="display:none">Disconnect</button>
-        <span id="yt-creds-hint" style="display:none;font-size:11px;color:var(--on-surface-dim)">
-            Place <code>youtube_credentials.json</code> in <code>static/</code> to enable uploads
-        </span>
+        <button class="btn-ghost" id="yt-help-btn">Setup guide</button>
     </div>
 
     <!-- Bulk Action Bar -->
@@ -54,6 +52,50 @@
         </div>
     </div>
 
+</div>
+
+<!-- YouTube Setup Guide Modal -->
+<div class="modal-overlay" id="yt-setup-overlay">
+    <div class="modal" style="width:640px;max-width:calc(100vw - 48px)">
+        <div class="modal-header">
+            <span class="modal-title">Set up YouTube uploads</span>
+            <button class="modal-close" id="yt-setup-close">✕</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:12px;color:var(--on-surface-dim);line-height:1.6">
+                Uploading clips needs a Google OAuth
+                <strong style="color:var(--on-surface)">client credentials</strong> file. You create it
+                once in the Google Cloud Console (free), then upload it here.
+            </p>
+            <ol class="yt-steps">
+                <li>Open the <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console ↗</a> and create a project (or pick an existing one).</li>
+                <li><strong>APIs &amp; Services → Library</strong>: search <strong>YouTube Data API v3</strong> and click <strong>Enable</strong>.</li>
+                <li><strong>APIs &amp; Services → OAuth consent screen</strong>: choose <strong>External</strong>, fill in app name + your email, and add your Google account under <strong>Test users</strong>.</li>
+                <li><strong>APIs &amp; Services → Credentials → Create Credentials → OAuth client ID</strong>: set application type to <strong>Web application</strong>.</li>
+                <li>Under <strong>Authorized redirect URIs</strong>, add this exact value:
+                    <div class="yt-copy-row">
+                        <code id="yt-redirect-display">http://localhost:5000/api/video/auth/callback</code>
+                        <button class="btn-ghost" id="yt-copy-redirect" type="button">Copy</button>
+                    </div>
+                </li>
+                <li>Click <strong>Create</strong>, then <strong>Download JSON</strong> for that client.</li>
+                <li>Upload the downloaded JSON file here:
+                    <div class="yt-upload-row">
+                        <input type="file" id="yt-creds-file" accept="application/json,.json">
+                        <button class="btn-primary" id="yt-creds-upload-btn" type="button">Upload</button>
+                    </div>
+                </li>
+            </ol>
+            <p style="font-size:11px;color:var(--on-surface-dim);line-height:1.6;margin-top:4px">
+                Saved to <code id="yt-creds-path">…</code>.
+                While your Google project is in “Testing”, uploads work only for accounts added as
+                test users, and YouTube may keep uploaded videos private until the project is verified.
+            </p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-ghost" id="yt-setup-done">Close</button>
+        </div>
+    </div>
 </div>
 
 <script src="{{ url_for('static', filename='js/video.js') }}"></script>

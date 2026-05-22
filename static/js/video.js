@@ -7,6 +7,7 @@ async function init() {
     setupConfigSave();
     setupBulkActions();
     setupYTAuth();
+    setupYTGuide();
 }
 
 async function loadConfig() {
@@ -37,27 +38,77 @@ async function checkYTAuth() {
     const label = document.getElementById("yt-label");
     const authBtn = document.getElementById("yt-auth-btn");
     const revokeBtn = document.getElementById("yt-revoke-btn");
-    const credsHint = document.getElementById("yt-creds-hint");
+
+    // Keep the setup guide's redirect URI + save path accurate.
+    if (res.redirect_uri) document.getElementById("yt-redirect-display").textContent = res.redirect_uri;
+    if (res.credentials_path) document.getElementById("yt-creds-path").textContent = res.credentials_path;
+
+    authBtn.style.display = "none";
+    revokeBtn.style.display = "none";
 
     if (res.error === "no_credentials") {
         dot.className = "status-dot";
-        label.textContent = "YouTube — no credentials file";
-        credsHint.style.display = "inline";
+        label.innerHTML = `No credentials yet — open <strong>Setup guide</strong> to add them`;
         return;
     }
-
-    credsHint.style.display = "none";
     if (res.authenticated) {
         dot.className = "status-dot connected";
         label.textContent = "YouTube Connected";
         revokeBtn.style.display = "block";
-        authBtn.style.display = "none";
     } else {
         dot.className = "status-dot";
         label.textContent = "YouTube Not Connected";
         authBtn.style.display = "block";
-        revokeBtn.style.display = "none";
     }
+}
+
+function setupYTGuide() {
+    const overlay = document.getElementById("yt-setup-overlay");
+    const open = () => overlay.classList.add("open");
+    const close = () => overlay.classList.remove("open");
+
+    document.getElementById("yt-help-btn").addEventListener("click", open);
+    document.getElementById("yt-setup-close").addEventListener("click", close);
+    document.getElementById("yt-setup-done").addEventListener("click", close);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+
+    document.getElementById("yt-copy-redirect").addEventListener("click", async () => {
+        const uri = document.getElementById("yt-redirect-display").textContent;
+        try {
+            await navigator.clipboard.writeText(uri);
+            showToast("Redirect URI copied", "success");
+        } catch {
+            showToast("Copy failed — select it manually", "error");
+        }
+    });
+
+    document.getElementById("yt-creds-upload-btn").addEventListener("click", async () => {
+        const input = document.getElementById("yt-creds-file");
+        const file = input.files[0];
+        if (!file) { showToast("Choose your downloaded JSON file first", "error"); return; }
+
+        const btn = document.getElementById("yt-creds-upload-btn");
+        btn.disabled = true;
+        btn.textContent = "Uploading...";
+        try {
+            const fd = new FormData();
+            fd.append("file", file);
+            const res = await fetch("/api/video/auth/credentials", { method: "POST", body: fd }).then(r => r.json());
+            if (res.ok) {
+                showToast("Credentials saved — now click Connect YouTube", "success");
+                input.value = "";
+                close();
+                await checkYTAuth();
+            } else {
+                showToast(res.error || "Upload failed", "error");
+            }
+        } catch {
+            showToast("Upload failed", "error");
+        } finally {
+            btn.disabled = false;
+            btn.textContent = "Upload";
+        }
+    });
 }
 
 function setupYTAuth() {
