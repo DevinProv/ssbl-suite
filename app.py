@@ -12,6 +12,10 @@ from database import db
 from routes import players_bp, events_bp, sets_bp, characters_bp, obs_bp, settings_bp, video_bp, events_mgmt_bp, export_bp
 from routes.overlay import overlay_bp, broadcast_scene_change
 from config import get_active_theme, get_obs_config
+from paths import resource_path, user_data_path, seed_user_data, FROZEN
+
+# Copy bundled default config (theme.json) out next to the exe on first launch.
+seed_user_data()
 
 # Make HTTPS certificate verification work inside the PyInstaller bundle (where
 # the system trust store is often unavailable) WITHOUT disabling validation.
@@ -43,8 +47,14 @@ CURRENT_VERSION = "1.0.0"
 GITHUB_REPO = "DevinProv/ssbl-suite"   # your app repo (for updates)
 DATA_REPO = ""                          # set at runtime from sync config
 
-app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///ssbl.db"
+app = Flask(
+    __name__,
+    template_folder=resource_path("templates"),
+    static_folder=resource_path("static"),
+)
+# Keep the DB next to the exe so imported data survives restarts/auto-updates.
+_db_uri = "sqlite:///" + user_data_path("ssbl.db") if FROZEN else "sqlite:///ssbl.db"
+app.config["SQLALCHEMY_DATABASE_URI"] = _db_uri
 app._update_pending = None             # path to _update.bat when ready
 
 db.init_app(app)
@@ -583,4 +593,6 @@ with app.app_context():
 threading.Thread(target=check_for_update, daemon=True, name="update-check").start()
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", threaded=True)
+    # The Werkzeug reloader/debugger re-launches sys.executable -- which, in a
+    # frozen onefile build, double-starts the whole exe. Keep them dev-only.
+    app.run(debug=not FROZEN, host="0.0.0.0", threaded=True, use_reloader=not FROZEN)

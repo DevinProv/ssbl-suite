@@ -18,7 +18,8 @@ _current_state = {
     "active_scene": ""
 }
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "overlay_config.json")
+from paths import user_data_path
+CONFIG_PATH = user_data_path("static", "overlay_config.json")
 
 DEFAULT_ELEMENTS = {
     "p1_name": {

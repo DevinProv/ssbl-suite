@@ -11,7 +11,16 @@ class CharacterManager:
         self.char_dir = os.path.abspath(CHARACTER_ASSETS_ROOT)
         print(f"Loading character data from: {self.char_dir}")
         if not os.path.exists(self.char_dir):
-            print(f"Character directory '{self.char_dir}' does not exist.")
+            # Create it so the user has an obvious place to drop character art
+            # (one subfolder per character, color images inside). Set
+            # CHARACTER_ASSETS_ROOT to point somewhere else.
+            try:
+                os.makedirs(self.char_dir, exist_ok=True)
+                print(f"Created empty character directory: {self.char_dir}")
+                print("Add one folder per character (with color images inside), "
+                      "then hit Refresh in the app.")
+            except Exception as e:
+                print(f"Could not create character directory '{self.char_dir}': {e}")
             return
         try:
             for char_name in os.listdir(self.char_dir):

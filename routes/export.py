@@ -10,9 +10,9 @@ from datetime import datetime, timezone
 
 export_bp = Blueprint("export", __name__)
 
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-EXPORT_DIR = os.path.join(BASE_DIR, "static", "export")
-SYNC_CONFIG_PATH = os.path.join(BASE_DIR, "static", "sync_config.json")
+from paths import user_data_path
+EXPORT_DIR = user_data_path("static", "export")
+SYNC_CONFIG_PATH = user_data_path("static", "sync_config.json")
 
 DEFAULT_SYNC_CONFIG = {
     "github_repo": "",        # e.g. "DevinProv/ssbl-data"

@@ -10,9 +10,9 @@ import urllib.error
 
 events_mgmt_bp = Blueprint("events_mgmt", __name__)
 
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-ROUND_MAP_PATH = os.path.join(BASE_DIR, "static", "round_mapping.json")
-STARTGG_CONFIG_PATH = os.path.join(BASE_DIR, "static", "startgg_config.json")
+from paths import user_data_path
+ROUND_MAP_PATH = user_data_path("static", "round_mapping.json")
+STARTGG_CONFIG_PATH = user_data_path("static", "startgg_config.json")
 
 DEFAULT_ROUND_MAP = {
     "Grand Final": "Grand Finals",

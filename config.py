@@ -1,11 +1,17 @@
 import os
 import json
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+from paths import user_data_path, FROZEN
 
-CHARACTER_ASSETS_ROOT = os.environ.get("CHARACTER_ASSETS_ROOT", 
-                                       os.path.expanduser("~/projects/assets/ssbl-app/images"))
-THEMES_PATH = os.path.join(BASE_DIR, "static", "themes", "theme.json")
-OBS_CONFIG_PATH = os.path.join(BASE_DIR, "static", "obs_config.json")
+# Character art lives outside the repo, so it can't be bundled into the exe.
+# Frozen builds look for an "images" folder next to the exe (drop art there);
+# source runs keep the original dev default. Either is overridable via env.
+_default_assets = user_data_path("images") if FROZEN \
+    else os.path.expanduser("~/projects/assets/ssbl-app/images")
+CHARACTER_ASSETS_ROOT = os.environ.get("CHARACTER_ASSETS_ROOT", _default_assets)
+
+# Writable config -- persisted next to the exe when frozen (see paths.py).
+THEMES_PATH = user_data_path("static", "themes", "theme.json")
+OBS_CONFIG_PATH = user_data_path("static", "obs_config.json")
 
 def get_active_theme():
     with open(THEMES_PATH, "r") as f:

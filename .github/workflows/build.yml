@@ -30,7 +30,14 @@ jobs:
         pip install pyinstaller
 
     - name: Build with PyInstaller
-      run: pyinstaller --onefile app.py
+      # Bundle templates + static into the exe (Windows --add-data uses ';').
+      # Without this the frozen app can't find dashboard.html and 500s.
+      run: >
+        pyinstaller --onefile --noconfirm
+        --add-data "templates;templates"
+        --add-data "static;static"
+        --hidden-import simple_websocket
+        app.py
 
     - name: Generate SHA-256 checksum
       shell: pwsh

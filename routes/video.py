@@ -8,10 +8,10 @@ import threading
 
 video_bp = Blueprint("video", __name__)
 
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-VIDEO_CONFIG_PATH = os.path.join(BASE_DIR, "static", "video_config.json")
-YT_CREDENTIALS_PATH = os.path.join(BASE_DIR, "static", "youtube_credentials.json")
-YT_TOKEN_PATH = os.path.join(BASE_DIR, "static", "youtube_token.json")
+from paths import user_data_path
+VIDEO_CONFIG_PATH = user_data_path("static", "video_config.json")
+YT_CREDENTIALS_PATH = user_data_path("static", "youtube_credentials.json")
+YT_TOKEN_PATH = user_data_path("static", "youtube_token.json")
 
 DEFAULT_VIDEO_CONFIG = {
     "title_template": "[Event] - [Round] - [P1] vs [P2]",
