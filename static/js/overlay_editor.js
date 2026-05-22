@@ -7,6 +7,16 @@ const FONTS = [
     "Barlow Condensed", "Teko", "Russo One",
     "Exo 2", "Orbitron", "Black Han Sans"
 ];
+// Common system fonts — render natively if installed on the editor/OBS machine.
+const SYSTEM_FONTS = [
+    "Arial", "Helvetica", "Segoe UI", "Tahoma", "Verdana", "Trebuchet MS",
+    "Calibri", "Times New Roman", "Georgia", "Cambria", "Garamond",
+    "Courier New", "Consolas", "Impact", "Franklin Gothic Medium", "Comic Sans MS"
+];
+// Built-ins first, then system fonts; users can also type any installed family.
+const FONT_OPTIONS = [...FONTS, ...SYSTEM_FONTS];
+
+const SNAP_DIST = 8;   // edge-snap threshold in canvas px
 
 let config = null;
 let currentScene = null;
@@ -42,6 +52,7 @@ function handleSceneChange(newScene, newConfig) {
     setupCanvas();
     renderElementList();
     renderCanvasElements();
+    syncScoreModeUI();
     drawGrid();
 }
 
@@ -95,6 +106,7 @@ async function init() {
     setupOBSPanel();
     setupBgUpload();
     setupSaveReset();
+    setupLayoutControls();
     window.addEventListener("resize", () => { setupCanvas(); drawGrid(); });
 }
 
@@ -102,30 +114,30 @@ function getCurrentElements() {
     if (!currentScene || !config.scenes || !config.scenes[currentScene]) {
         return {};
     }
-    return config.scenes[currentScene].elements;
+    return ensureElementKeys(config.scenes[currentScene].elements);
 }
 
 function getDefaultElements() {
     return {
-        "p1_name": {
-            "label": "P1 Name", "type": "text", "visible": true,
-            "x": 50, "y": 420,
-            "font": "Rajdhani", "fontSize": 36, "fontColor": "#f0f0f2",
+        "event_name": {
+            "label": "Event", "type": "text", "visible": true,
+            "x": 960, "y": 12, "align": "center",
+            "font": "Rajdhani", "fontSize": 22, "fontColor": "#f0f0f2",
             "shadow": true, "shadowColor": "#000000",
             "background": false, "bgColor": "#000000", "bgOpacity": 0.5, "borderRadius": 4,
             "opacity": 1.0
         },
-        "p2_name": {
-            "label": "P2 Name", "type": "text", "visible": true,
-            "x": 1400, "y": 420,
-            "font": "Rajdhani", "fontSize": 36, "fontColor": "#f0f0f2",
+        "round_name": {
+            "label": "Round", "type": "text", "visible": true,
+            "x": 960, "y": 44, "align": "center",
+            "font": "Rajdhani", "fontSize": 28, "fontColor": "#f0f0f2",
             "shadow": true, "shadowColor": "#000000",
             "background": false, "bgColor": "#000000", "bgOpacity": 0.5, "borderRadius": 4,
             "opacity": 1.0
         },
         "p1_score": {
             "label": "P1 Score", "type": "text", "visible": true,
-            "x": 820, "y": 80,
+            "x": 926, "y": 84, "align": "right",
             "font": "Rajdhani", "fontSize": 48, "fontColor": "#f0f0f2",
             "shadow": true, "shadowColor": "#000000",
             "background": false, "bgColor": "#000000", "bgOpacity": 0.5, "borderRadius": 4,
@@ -133,24 +145,32 @@ function getDefaultElements() {
         },
         "p2_score": {
             "label": "P2 Score", "type": "text", "visible": true,
-            "x": 920, "y": 80,
+            "x": 994, "y": 84, "align": "left",
             "font": "Rajdhani", "fontSize": 48, "fontColor": "#f0f0f2",
             "shadow": true, "shadowColor": "#000000",
             "background": false, "bgColor": "#000000", "bgOpacity": 0.5, "borderRadius": 4,
             "opacity": 1.0
         },
-        "round_name": {
-            "label": "Round", "type": "text", "visible": true,
-            "x": 760, "y": 40,
-            "font": "Rajdhani", "fontSize": 28, "fontColor": "#f0f0f2",
+        "score_combined": {
+            "label": "Score (Combined)", "type": "text", "visible": false,
+            "x": 960, "y": 84, "align": "center",
+            "font": "Rajdhani", "fontSize": 48, "fontColor": "#f0f0f2",
             "shadow": true, "shadowColor": "#000000",
             "background": false, "bgColor": "#000000", "bgOpacity": 0.5, "borderRadius": 4,
             "opacity": 1.0
         },
-        "event_name": {
-            "label": "Event", "type": "text", "visible": true,
-            "x": 660, "y": 10,
-            "font": "Rajdhani", "fontSize": 22, "fontColor": "#f0f0f2",
+        "p1_name": {
+            "label": "P1 Name", "type": "text", "visible": true,
+            "x": 40, "y": 420, "align": "left",
+            "font": "Rajdhani", "fontSize": 36, "fontColor": "#f0f0f2",
+            "shadow": true, "shadowColor": "#000000",
+            "background": false, "bgColor": "#000000", "bgOpacity": 0.5, "borderRadius": 4,
+            "opacity": 1.0
+        },
+        "p2_name": {
+            "label": "P2 Name", "type": "text", "visible": true,
+            "x": 1880, "y": 420, "align": "right",
+            "font": "Rajdhani", "fontSize": 36, "fontColor": "#f0f0f2",
             "shadow": true, "shadowColor": "#000000",
             "background": false, "bgColor": "#000000", "bgOpacity": 0.5, "borderRadius": 4,
             "opacity": 1.0
@@ -164,6 +184,17 @@ function getDefaultElements() {
             "x": 1690, "y": 460, "width": 200, "height": 200, "opacity": 1.0
         }
     };
+}
+
+// Backfill any newly-added default elements (e.g. combined score) into a scene
+// loaded from an older config, without touching existing values.
+function ensureElementKeys(elements) {
+    if (!elements || elements.score_combined) return elements;  // already migrated
+    const defaults = getDefaultElements();
+    Object.keys(defaults).forEach(key => {
+        if (!elements[key]) elements[key] = defaults[key];
+    });
+    return elements;
 }
 
 // =====================
@@ -285,11 +316,13 @@ function createCanvasElement(key, el) {
         placeholder.className = "img-placeholder";
         placeholder.innerHTML = `<span style="font-size:24px">🖼️</span><span>${el.label}</span>`;
         node.appendChild(placeholder);
-        const resizeHandle = document.createElement("div");
-        resizeHandle.className = "resize-handle";
-        node.appendChild(resizeHandle);
-        resizeHandle.addEventListener("mousedown", (e) => startResize(e, key));
     }
+
+    // Corner handle: images resize width/height, text scales font size.
+    const resizeHandle = document.createElement("div");
+    resizeHandle.className = "resize-handle";
+    node.appendChild(resizeHandle);
+    resizeHandle.addEventListener("mousedown", (e) => startResize(e, key));
 
     node.addEventListener("mousedown", (e) => {
         if (e.target.classList.contains("resize-handle")) return;
@@ -303,6 +336,11 @@ function applyTextStyles(node, el) {
     node.style.fontFamily = `'${el.font}', sans-serif`;
     node.style.fontSize = el.fontSize + "px";
     node.style.color = el.fontColor;
+    // Anchor on x by alignment so the canvas matches the live overlay.
+    const align = el.align || "left";
+    node.style.transform = align === "center" ? "translateX(-50%)"
+        : align === "right" ? "translateX(-100%)" : "none";
+    node.style.textAlign = align;
     node.style.textShadow = el.shadow
         ? `2px 2px 4px ${el.shadowColor}, 0 0 8px ${el.shadowColor}`
         : "none";
@@ -324,10 +362,117 @@ function applyTextStyles(node, el) {
 function getPreviewText(key) {
     const map = {
         p1_name: "Player 1", p2_name: "Player 2",
-        p1_score: "0", p2_score: "0",
+        p1_score: "0", p2_score: "0", score_combined: "2 - 1",
         round_name: "Winners Finals", event_name: "SSBL Monthly"
     };
     return map[key] || key;
+}
+
+// =====================
+// Layout presets & score mode
+// =====================
+function presetCenteredTop() {
+    return getDefaultElements();   // separate scores, centered top row
+}
+
+function presetCombinedScore() {
+    const e = getDefaultElements();
+    e.p1_score.visible = false;
+    e.p2_score.visible = false;
+    e.score_combined.visible = true;
+    return e;
+}
+
+function presetLowerThird() {
+    const e = getDefaultElements();
+    e.event_name.x = 960; e.event_name.y = 16;
+    e.round_name.x = 960; e.round_name.y = 46;
+    e.p1_portrait.x = 30;   e.p1_portrait.y = 820;
+    e.p2_portrait.x = 1690; e.p2_portrait.y = 820;
+    e.p1_name.x = 250;  e.p1_name.y = 980; e.p1_name.align = "left";
+    e.p2_name.x = 1670; e.p2_name.y = 980; e.p2_name.align = "right";
+    e.p1_score.x = 905;  e.p1_score.y = 968; e.p1_score.align = "right";
+    e.p2_score.x = 1015; e.p2_score.y = 968; e.p2_score.align = "left";
+    e.score_combined.x = 960; e.score_combined.y = 968;
+    return e;
+}
+
+function presetMinimal() {
+    const e = getDefaultElements();
+    e.event_name.visible = false;
+    e.round_name.visible = false;
+    e.p1_portrait.visible = false;
+    e.p2_portrait.visible = false;
+    e.p1_score.visible = false;
+    e.p2_score.visible = false;
+    e.score_combined.visible = true;
+    e.p1_name.x = 760;  e.p1_name.y = 940; e.p1_name.align = "right";
+    e.p2_name.x = 1160; e.p2_name.y = 940; e.p2_name.align = "left";
+    e.score_combined.x = 960; e.score_combined.y = 930;
+    return e;
+}
+
+const PRESETS = {
+    centered_top:   { label: "Centered Top",   build: presetCenteredTop },
+    combined_score: { label: "Combined Score", build: presetCombinedScore },
+    lower_third:    { label: "Lower Third",     build: presetLowerThird },
+    minimal:        { label: "Minimal",         build: presetMinimal },
+};
+
+function applyPreset(name) {
+    const preset = PRESETS[name];
+    if (!preset || !currentScene) { showToast("No active scene", "error"); return; }
+    if (!confirm(`Apply the "${preset.label}" layout to "${currentScene}"? This replaces the current element positions.`)) return;
+    config.scenes[currentScene].elements = preset.build();
+    selectedKey = null;
+    renderElementList();
+    renderCanvasElements();
+    syncScoreModeUI();
+    document.getElementById("props-title").textContent = "Select an element";
+    document.getElementById("props-body").innerHTML = `<div class="no-selection">Click an element on the canvas to edit its properties</div>`;
+    markDirty();
+    showToast(`Applied "${preset.label}" layout`, "success");
+}
+
+function isCombinedMode() {
+    const e = getCurrentElements();
+    return !!(e.score_combined && e.score_combined.visible);
+}
+
+function setScoreMode(combined) {
+    const e = getCurrentElements();
+    if (!e.score_combined) return;
+    e.score_combined.visible = combined;
+    if (e.p1_score) e.p1_score.visible = !combined;
+    if (e.p2_score) e.p2_score.visible = !combined;
+    if (selectedKey && (!e[selectedKey] || !e[selectedKey].visible)) selectedKey = null;
+    renderElementList();
+    renderCanvasElements();
+    syncScoreModeUI();
+    markDirty();
+}
+
+function syncScoreModeUI() {
+    const combined = isCombinedMode();
+    const sep  = document.getElementById("score-mode-sep");
+    const comb = document.getElementById("score-mode-comb");
+    if (sep)  sep.classList.toggle("active", !combined);
+    if (comb) comb.classList.toggle("active", combined);
+}
+
+function setupLayoutControls() {
+    const sel = document.getElementById("preset-select");
+    if (sel) {
+        sel.innerHTML = Object.entries(PRESETS)
+            .map(([k, v]) => `<option value="${k}">${v.label}</option>`).join("");
+    }
+    const applyBtn = document.getElementById("preset-apply");
+    if (applyBtn) applyBtn.addEventListener("click", () => applyPreset(sel.value));
+    const sep  = document.getElementById("score-mode-sep");
+    const comb = document.getElementById("score-mode-comb");
+    if (sep)  sep.addEventListener("click", () => setScoreMode(false));
+    if (comb) comb.addEventListener("click", () => setScoreMode(true));
+    syncScoreModeUI();
 }
 
 // =====================
@@ -345,6 +490,51 @@ function selectElement(key) {
 }
 
 // =====================
+// Edge snapping ("bump")
+// =====================
+function elVisualLeft(el, w) {
+    // Where the element's left edge actually sits (text honors its align anchor).
+    if (el.type === "text") {
+        const a = el.align || "left";
+        return a === "center" ? el.x - w / 2 : a === "right" ? el.x - w : el.x;
+    }
+    return el.x;  // images anchor top-left
+}
+
+function collectSnapTargets(excludeKey) {
+    const { width, height } = config.resolution;
+    const xs = [0, width / 2, width];     // canvas left / center / right
+    const ys = [0, height / 2, height];   // canvas top / middle / bottom
+    Object.entries(getCurrentElements()).forEach(([k, el]) => {
+        if (k === excludeKey || !el.visible) return;
+        const n = document.getElementById(`cel-${k}`);
+        if (!n) return;
+        const w = n.offsetWidth, h = n.offsetHeight;
+        const left = elVisualLeft(el, w);
+        xs.push(left, left + w / 2, left + w);
+        ys.push(el.y, el.y + h / 2, el.y + h);
+    });
+    return { xs, ys };
+}
+
+function clearGuides() {
+    document.querySelectorAll(".snap-guide").forEach(n => n.remove());
+}
+
+function drawGuide(orientation, pos) {
+    const root = document.getElementById("canvas-root");
+    if (!root) return;
+    const { width, height } = config.resolution;
+    const t = Math.max(1, 1.5 / scale);   // keep ~1.5px on screen regardless of zoom
+    const line = document.createElement("div");
+    line.className = "snap-guide";
+    line.style.cssText = orientation === "v"
+        ? `position:absolute;top:0;left:${pos}px;width:${t}px;height:${height}px;background:#ff3b6b;pointer-events:none;z-index:50;`
+        : `position:absolute;left:0;top:${pos}px;height:${t}px;width:${width}px;background:#ff3b6b;pointer-events:none;z-index:50;`;
+    root.appendChild(line);
+}
+
+// =====================
 // Drag
 // =====================
 function startDrag(e, key) {
@@ -359,14 +549,40 @@ function startDrag(e, key) {
     const startX = el.x;
     const startY = el.y;
 
+    // Geometry is fixed while dragging — measure once.
+    const w = node.offsetWidth, h = node.offsetHeight;
+    const align = el.type === "text" ? (el.align || "left") : "left";
+    const leftOff = align === "center" ? -w / 2 : align === "right" ? -w : 0;
+    const xOffsets = [leftOff, leftOff + w / 2, leftOff + w];  // left / center / right
+    const yOffsets = [0, h / 2, h];                            // top / middle / bottom
+    const targets = collectSnapTargets(key);
+
     node.classList.add("dragging");
 
     function onMove(e) {
-        const freeMove = e.shiftKey;
+        const freeMove = e.shiftKey;          // hold Shift to disable all snapping
         const dx = (e.clientX - startMouseX) / scale;
         const dy = (e.clientY - startMouseY) / scale;
-        const newX = snap(startX + dx, freeMove);
-        const newY = snap(startY + dy, freeMove);
+        let newX = snap(startX + dx, freeMove);
+        let newY = snap(startY + dy, freeMove);
+
+        clearGuides();
+        if (!freeMove) {
+            let bx = null;
+            for (const off of xOffsets) for (const t of targets.xs) {
+                const d = Math.abs((newX + off) - t);
+                if (d <= SNAP_DIST && (bx === null || d < bx.d)) bx = { d, x: t - off, g: t };
+            }
+            if (bx) { newX = bx.x; drawGuide("v", bx.g); }
+
+            let by = null;
+            for (const off of yOffsets) for (const t of targets.ys) {
+                const d = Math.abs((newY + off) - t);
+                if (d <= SNAP_DIST && (by === null || d < by.d)) by = { d, y: t - off, g: t };
+            }
+            if (by) { newY = by.y; drawGuide("h", by.g); }
+        }
+
         el.x = newX;
         el.y = newY;
         node.style.left = newX + "px";
@@ -377,6 +593,7 @@ function startDrag(e, key) {
     }
 
     function onUp() {
+        clearGuides();
         node.classList.remove("dragging", "snapping");
         window.removeEventListener("mousemove", onMove);
         window.removeEventListener("mouseup", onUp);
@@ -397,19 +614,35 @@ function startResize(e, key) {
     const node = document.getElementById(`cel-${key}`);
     const startMouseX = e.clientX;
     const startMouseY = e.clientY;
-    const startW = el.width;
-    const startH = el.height;
 
-    function onMove(e) {
-        const freeMove = e.shiftKey;
-        const dw = (e.clientX - startMouseX) / scale;
-        const dh = (e.clientY - startMouseY) / scale;
-        el.width = Math.max(20, snap(startW + dw, freeMove));
-        el.height = Math.max(20, snap(startH + dh, freeMove));
-        node.style.width = el.width + "px";
-        node.style.height = el.height + "px";
-        updateSizeInputs(el.width, el.height);
-        markDirty();
+    let onMove;
+    if (el.type === "text") {
+        // Text has no box — corner drag scales the font size proportionally.
+        const startFont = el.fontSize;
+        const startH = node.offsetHeight || (startFont * 1.2);
+        onMove = (e) => {
+            const dy = (e.clientY - startMouseY) / scale;
+            const ratio = Math.max(0.1, (startH + dy) / startH);
+            el.fontSize = Math.min(400, Math.max(8, Math.round(startFont * ratio)));
+            node.style.fontSize = el.fontSize + "px";
+            const inp = document.getElementById("prop-font-size");
+            if (inp) inp.value = el.fontSize;
+            markDirty();
+        };
+    } else {
+        const startW = el.width;
+        const startH = el.height;
+        onMove = (e) => {
+            const freeMove = e.shiftKey;
+            const dw = (e.clientX - startMouseX) / scale;
+            const dh = (e.clientY - startMouseY) / scale;
+            el.width = Math.max(20, snap(startW + dw, freeMove));
+            el.height = Math.max(20, snap(startH + dh, freeMove));
+            node.style.width = el.width + "px";
+            node.style.height = el.height + "px";
+            updateSizeInputs(el.width, el.height);
+            markDirty();
+        };
     }
 
     function onUp() {
@@ -483,9 +716,10 @@ function renderPropsPanel(key) {
             <div class="prop-group-title">Typography</div>
             <div>
                 <label class="field-label">Font</label>
-                <select class="prop-input" id="prop-font">
-                    ${FONTS.map(f => `<option value="${f}" ${el.font===f?"selected":""}>${f}</option>`).join("")}
-                </select>
+                <input class="prop-input" id="prop-font" list="font-list" value="${el.font}" placeholder="Pick or type any installed font" autocomplete="off">
+                <datalist id="font-list">
+                    ${FONT_OPTIONS.map(f => `<option value="${f}"></option>`).join("")}
+                </datalist>
             </div>
             <div>
                 <label class="field-label">Size</label>
@@ -496,6 +730,14 @@ function renderPropsPanel(key) {
                 <div class="field-row">
                     <input type="color" class="prop-color" id="prop-font-color" value="${el.fontColor}">
                     <input type="text" class="prop-input" id="prop-font-color-hex" value="${el.fontColor}">
+                </div>
+            </div>
+            <div>
+                <label class="field-label">Alignment</label>
+                <div class="align-seg" id="prop-align">
+                    <button type="button" data-align="left"   class="${(el.align||'left')==='left'?'active':''}">Left</button>
+                    <button type="button" data-align="center" class="${el.align==='center'?'active':''}">Center</button>
+                    <button type="button" data-align="right"  class="${el.align==='right'?'active':''}">Right</button>
                 </div>
             </div>
         </div>
@@ -602,6 +844,17 @@ function bindPropEvents(key) {
         bind("prop-font-size", e => { el.fontSize = parseInt(e.target.value) || 16; node.style.fontSize = el.fontSize + "px"; });
         bind("prop-font-color", e => { el.fontColor = e.target.value; node.style.color = el.fontColor; document.getElementById("prop-font-color-hex").value = el.fontColor; });
         bind("prop-font-color-hex", e => { if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) { el.fontColor = e.target.value; node.style.color = el.fontColor; document.getElementById("prop-font-color").value = el.fontColor; }});
+        const alignSeg = document.getElementById("prop-align");
+        if (alignSeg) {
+            alignSeg.querySelectorAll("button").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    el.align = btn.dataset.align;
+                    alignSeg.querySelectorAll("button").forEach(b => b.classList.toggle("active", b === btn));
+                    applyTextStyles(node, el);
+                    markDirty();
+                });
+            });
+        }
         bind("prop-shadow", e => { el.shadow = e.target.checked; const row = document.getElementById("shadow-color-row"); if (row) { row.style.opacity = el.shadow ? "1" : "0.4"; row.style.pointerEvents = el.shadow ? "" : "none"; } applyTextStyles(node, el); });
         bind("prop-shadow-color", e => { el.shadowColor = e.target.value; document.getElementById("prop-shadow-color-hex").value = el.shadowColor; applyTextStyles(node, el); });
         bind("prop-shadow-color-hex", e => { if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) { el.shadowColor = e.target.value; document.getElementById("prop-shadow-color").value = el.shadowColor; applyTextStyles(node, el); }});
@@ -734,7 +987,9 @@ function setupSaveReset() {
         await fetch(`/api/overlay/scene/${encodeURIComponent(currentScene)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ elements: getCurrentElements() })
+            // Persist the (OBS-synced) canvas resolution so the live overlay
+            // renders in the same coordinate space as the editor.
+            body: JSON.stringify({ elements: getCurrentElements(), resolution: config.resolution })
         });
         markClean();
         showToast(`Saved "${currentScene}"`, "success");

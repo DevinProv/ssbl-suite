@@ -92,6 +92,7 @@
                 case "p2_name":    return state.player2.name;
                 case "p1_score":   return String(state.player1.score);
                 case "p2_score":   return String(state.player2.score);
+                case "score_combined": return `${state.player1.score} - ${state.player2.score}`;
                 case "round_name": return state.round;
                 case "event_name": return state.event;
                 default: return "";
@@ -156,6 +157,11 @@
                     node.style.fontSize = el.fontSize + "px";
                     node.style.fontWeight = "700";
                     node.style.color = el.fontColor;
+                    // Anchor on x by alignment so centered text stays centered.
+                    const align = el.align || "left";
+                    node.style.transform = align === "center" ? "translateX(-50%)"
+                        : align === "right" ? "translateX(-100%)" : "none";
+                    node.style.textAlign = align;
                     node.style.textShadow = el.shadow
                         ? `2px 2px 4px ${el.shadowColor}, 0 0 8px ${el.shadowColor}`
                         : "none";

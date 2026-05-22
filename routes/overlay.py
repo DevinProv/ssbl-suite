@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request, render_template
 import json
 import os
+import copy
 import queue
 import threading
 
@@ -21,26 +22,29 @@ _current_state = {
 from paths import user_data_path
 CONFIG_PATH = user_data_path("static", "overlay_config.json")
 
+# Text elements carry an "align" (left | center | right). Centered/right
+# elements anchor on their x so the top row stays centered as text length
+# changes (handled by the display + editor via a CSS transform).
 DEFAULT_ELEMENTS = {
-    "p1_name": {
-        "label": "P1 Name", "type": "text", "visible": True,
-        "x": 50, "y": 420,
-        "font": "Rajdhani", "fontSize": 36, "fontColor": "#f0f0f2",
+    "event_name": {
+        "label": "Event", "type": "text", "visible": True,
+        "x": 960, "y": 12, "align": "center",
+        "font": "Rajdhani", "fontSize": 22, "fontColor": "#f0f0f2",
         "shadow": True, "shadowColor": "#000000",
         "background": False, "bgColor": "#000000", "bgOpacity": 0.5, "borderRadius": 4,
         "opacity": 1.0
     },
-    "p2_name": {
-        "label": "P2 Name", "type": "text", "visible": True,
-        "x": 1400, "y": 420,
-        "font": "Rajdhani", "fontSize": 36, "fontColor": "#f0f0f2",
+    "round_name": {
+        "label": "Round", "type": "text", "visible": True,
+        "x": 960, "y": 44, "align": "center",
+        "font": "Rajdhani", "fontSize": 28, "fontColor": "#f0f0f2",
         "shadow": True, "shadowColor": "#000000",
         "background": False, "bgColor": "#000000", "bgOpacity": 0.5, "borderRadius": 4,
         "opacity": 1.0
     },
     "p1_score": {
         "label": "P1 Score", "type": "text", "visible": True,
-        "x": 820, "y": 80,
+        "x": 926, "y": 84, "align": "right",
         "font": "Rajdhani", "fontSize": 48, "fontColor": "#f0f0f2",
         "shadow": True, "shadowColor": "#000000",
         "background": False, "bgColor": "#000000", "bgOpacity": 0.5, "borderRadius": 4,
@@ -48,24 +52,32 @@ DEFAULT_ELEMENTS = {
     },
     "p2_score": {
         "label": "P2 Score", "type": "text", "visible": True,
-        "x": 920, "y": 80,
+        "x": 994, "y": 84, "align": "left",
         "font": "Rajdhani", "fontSize": 48, "fontColor": "#f0f0f2",
         "shadow": True, "shadowColor": "#000000",
         "background": False, "bgColor": "#000000", "bgOpacity": 0.5, "borderRadius": 4,
         "opacity": 1.0
     },
-    "round_name": {
-        "label": "Round", "type": "text", "visible": True,
-        "x": 760, "y": 40,
-        "font": "Rajdhani", "fontSize": 28, "fontColor": "#f0f0f2",
+    "score_combined": {
+        "label": "Score (Combined)", "type": "text", "visible": False,
+        "x": 960, "y": 84, "align": "center",
+        "font": "Rajdhani", "fontSize": 48, "fontColor": "#f0f0f2",
         "shadow": True, "shadowColor": "#000000",
         "background": False, "bgColor": "#000000", "bgOpacity": 0.5, "borderRadius": 4,
         "opacity": 1.0
     },
-    "event_name": {
-        "label": "Event", "type": "text", "visible": True,
-        "x": 660, "y": 10,
-        "font": "Rajdhani", "fontSize": 22, "fontColor": "#f0f0f2",
+    "p1_name": {
+        "label": "P1 Name", "type": "text", "visible": True,
+        "x": 40, "y": 420, "align": "left",
+        "font": "Rajdhani", "fontSize": 36, "fontColor": "#f0f0f2",
+        "shadow": True, "shadowColor": "#000000",
+        "background": False, "bgColor": "#000000", "bgOpacity": 0.5, "borderRadius": 4,
+        "opacity": 1.0
+    },
+    "p2_name": {
+        "label": "P2 Name", "type": "text", "visible": True,
+        "x": 1880, "y": 420, "align": "right",
+        "font": "Rajdhani", "fontSize": 36, "fontColor": "#f0f0f2",
         "shadow": True, "shadowColor": "#000000",
         "background": False, "bgColor": "#000000", "bgOpacity": 0.5, "borderRadius": 4,
         "opacity": 1.0
@@ -90,24 +102,47 @@ DEFAULT_CONFIG = {
     "scenes": {}
 }
 
+def default_elements():
+    """A fresh, independent copy of the default element set."""
+    return copy.deepcopy(DEFAULT_ELEMENTS)
+
+def _ensure_keys(elements):
+    """Backfill any default elements missing from a saved scene.
+
+    Lets older configs pick up new elements (e.g. the combined score) without
+    overwriting the user's existing positions/styles.
+    """
+    changed = False
+    for key, default in DEFAULT_ELEMENTS.items():
+        if key not in elements:
+            elements[key] = copy.deepcopy(default)
+            changed = True
+    return changed
+
 def load_config():
     if os.path.exists(CONFIG_PATH):
         with open(CONFIG_PATH, "r") as f:
             data = json.load(f)
+        dirty = False
         # Migrate old flat config to per-scene format
         if "elements" in data and "scenes" not in data:
             scene_name = data.get("active_scene", "Default") or "Default"
-            migrated = {
+            data = {
                 "resolution": data.get("resolution", {"width": 1920, "height": 1080}),
                 "active_scene": scene_name,
                 "scenes": {
                     scene_name: {"elements": data["elements"]}
                 }
             }
-            save_config(migrated)
-            return migrated
+            dirty = True
+        # Backfill newly-added elements into every saved scene.
+        for scene in data.get("scenes", {}).values():
+            if _ensure_keys(scene.setdefault("elements", {})):
+                dirty = True
+        if dirty:
+            save_config(data)
         return data
-    return DEFAULT_CONFIG.copy()
+    return copy.deepcopy(DEFAULT_CONFIG)
 
 def save_config(config):
     os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
@@ -117,7 +152,7 @@ def save_config(config):
 def get_scene_elements(config, scene_name):
     if scene_name not in config.get("scenes", {}):
         config.setdefault("scenes", {})[scene_name] = {
-            "elements": DEFAULT_ELEMENTS.copy()
+            "elements": default_elements()
         }
     return config["scenes"][scene_name]["elements"]
 
@@ -187,7 +222,7 @@ def broadcast_scene_change(scene_name: str):
     # empty canvas on first switch.
     if scene_name and scene_name not in config.get("scenes", {}):
         config.setdefault("scenes", {})[scene_name] = {
-            "elements": DEFAULT_ELEMENTS.copy()
+            "elements": default_elements()
         }
 
     save_config(config)
@@ -226,6 +261,11 @@ def save_scene(scene_name):
     data = request.get_json()
     config = load_config()
     config.setdefault("scenes", {})[scene_name] = {"elements": data["elements"]}
+    # Persist the canvas resolution so the display shares the editor's
+    # coordinate space (synced from OBS when connected).
+    res = data.get("resolution")
+    if isinstance(res, dict) and res.get("width") and res.get("height"):
+        config["resolution"] = {"width": res["width"], "height": res["height"]}
     save_config(config)
     broadcast_config(config)
     return jsonify({"ok": True})
@@ -245,7 +285,7 @@ def reset_config():
     config = load_config()
     active = config.get("active_scene", "")
     if active and active in config.get("scenes", {}):
-        config["scenes"][active]["elements"] = DEFAULT_ELEMENTS.copy()
+        config["scenes"][active]["elements"] = default_elements()
         save_config(config)
         broadcast_config(config)
         return jsonify(config)
