@@ -43,7 +43,7 @@ except ImportError:
 # =====================
 # Version / Update config
 # =====================
-CURRENT_VERSION = "1.0.2"
+CURRENT_VERSION = "1.0.3"
 GITHUB_REPO = "DevinProv/ssbl-suite"   # your app repo (for updates)
 DATA_REPO = ""                          # set at runtime from sync config
 

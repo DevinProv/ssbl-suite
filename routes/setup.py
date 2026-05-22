@@ -162,13 +162,59 @@ def _download_and_extract():
                 pass
 
 
-def _extract_archive(archive_path, dest_root):
-    """Unpack a zip/tar into dest_root, flattening a single wrapping folder.
+def _dir_has_image_file(path):
+    """True if `path` directly contains at least one image file."""
+    try:
+        return any(
+            e.lower().endswith(_IMAGE_EXTS) and os.path.isfile(os.path.join(path, e))
+            for e in os.listdir(path)
+        )
+    except OSError:
+        return False
 
-    The art pack may contain the character folders directly or wrapped in one
-    top-level dir (e.g. ``images/``); we descend past wrapper dirs but stop at a
-    character folder (one that holds image files directly).
+
+def _is_character_folder(path):
+    """A leaf folder of color images for one character.
+
+    It holds image files directly and has no image-bearing subfolders -- the
+    latter would make it a *parent* of character folders, not a character.
     """
+    try:
+        has_img_subdir = any(
+            os.path.isdir(os.path.join(path, e)) and _dir_has_image_file(os.path.join(path, e))
+            for e in os.listdir(path)
+        )
+    except OSError:
+        return False
+    return _dir_has_image_file(path) and not has_img_subdir
+
+
+def _find_character_root(root):
+    """Find the dir whose immediate subfolders are the character folders.
+
+    The art pack wraps everything in a top-level ``images/`` dir that *also*
+    holds a loose ``placeholder.png`` -- so a naive "stop at the first folder
+    containing an image" check mistakes that wrapper for a character folder and
+    double-nests it (``images/images/<char>/``). Instead we search
+    shallowest-first for the folder that actually *contains* character folders,
+    no matter how deeply it's wrapped.
+    """
+    queue = [root]
+    while queue:
+        d = queue.pop(0)
+        try:
+            subdirs = [os.path.join(d, e) for e in os.listdir(d)
+                       if os.path.isdir(os.path.join(d, e))]
+        except OSError:
+            continue
+        if any(_is_character_folder(s) for s in subdirs):
+            return d
+        queue.extend(subdirs)
+    return root  # nothing matched; copy the archive as-is
+
+
+def _extract_archive(archive_path, dest_root):
+    """Unpack a zip/tar into dest_root, flattening any wrapping folder(s)."""
     tmp = tempfile.mkdtemp(prefix="ssbl_imgs_")
     try:
         if zipfile.is_zipfile(archive_path):
@@ -180,18 +226,7 @@ def _extract_archive(archive_path, dest_root):
         else:
             raise ValueError("Downloaded file is not a .zip or .tar archive")
 
-        src = tmp
-        while True:
-            entries = [e for e in os.listdir(src) if not e.startswith(".")]
-            if len(entries) != 1:
-                break
-            only = os.path.join(src, entries[0])
-            if not os.path.isdir(only):
-                break
-            inner = os.listdir(only)
-            if any(f.lower().endswith(_IMAGE_EXTS) for f in inner):
-                break  # this is a character folder, not a wrapper — stop here
-            src = only
+        src = _find_character_root(tmp)
 
         os.makedirs(dest_root, exist_ok=True)
         for name in os.listdir(src):
