@@ -1,4 +1,4 @@
-name: Build Windows Executable
+name: Build Executables
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write   # required for creating GitHub Releases
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
 
     steps:
@@ -48,18 +48,73 @@ jobs:
         "$hash  $($exe.Name)" | Out-File -FilePath "$($exe.FullName).sha256" -Encoding ascii -NoNewline
         Write-Host "SHA-256($($exe.Name)) = $hash"
 
-    - name: Upload Executable (artifact)
+    - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
       with:
-        name: windows-executable
+        name: windows-build
         path: |
           dist/*.exe
           dist/*.exe.sha256
 
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Build with PyInstaller
+      # Linux --add-data uses ':' as the separator (not ';' like Windows).
+      run: >
+        pyinstaller --onefile --noconfirm
+        --add-data "templates:templates"
+        --add-data "static:static"
+        --hidden-import simple_websocket
+        app.py
+
+    - name: Generate SHA-256 checksum
+      run: |
+        cd dist
+        # onefile build produces ./app (no extension on Linux)
+        sha256sum app > app.sha256
+        cat app.sha256
+
+    - name: Upload Linux artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-build
+        path: |
+          dist/app
+          dist/app.sha256
+
+  release:
+    needs: [build-windows, build-linux]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Download all build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: dist
+        merge-multiple: true   # flatten windows-build + linux-build into dist/
+
     - name: Publish Release
-      if: startsWith(github.ref, 'refs/tags/v')
       uses: softprops/action-gh-release@v2
       with:
         files: |
           dist/*.exe
           dist/*.exe.sha256
+          dist/app
+          dist/app.sha256
