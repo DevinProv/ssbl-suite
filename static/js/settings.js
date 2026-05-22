@@ -198,9 +198,19 @@ async function initUpdateStatus() {
 }
  
 document.getElementById("apply-update-btn")?.addEventListener("click", async () => {
-    if (!confirm("The app will close and restart to apply the update. Continue?")) return;
+    if (!confirm("The app will close and reopen to apply the update. Continue?")) return;
+    const btn = document.getElementById("apply-update-btn");
+    btn.disabled = true;
+    btn.textContent = "Updating…";
     const res = await fetch("/api/update/apply", { method: "POST" }).then(r => r.json()).catch(() => null);
-    if (res?.error) showToast(res.error, "error");
+    if (res?.error) {
+        showToast(res.error, "error");
+        btn.disabled = false;
+        btn.textContent = "Restart & Update";
+        return;
+    }
+    document.getElementById("update-label").textContent =
+        "Updating… the app will close and reopen in a few seconds.";
 });
  
 // ── GitHub import ──────────────────────────────

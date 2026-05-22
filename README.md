@@ -131,9 +131,19 @@ folder.
 
 ## Updating
 
-- **Windows:** the app checks GitHub Releases on startup and can update itself —
-  when an update is staged, use **Settings → App Updates → Restart & Update**.
-- **Linux:** re-download the latest `app` from the Releases page.
+On **Windows**, the app checks GitHub Releases on startup. When a newer version
+is found it downloads and verifies it in the background, then shows an
+**Update available** prompt. You can apply it two ways:
+
+- **Update & Restart** — applies it immediately (the app closes and reopens).
+- **Later** — the update is applied automatically the next time you open the app.
+
+> **Upgrading from v1.0.4 or earlier?** Those builds can download an update but
+> don't apply it on a normal restart. Open **Settings → App Updates** and click
+> **Restart & Update** once to move up to v1.0.5+. From then on, restarts apply
+> staged updates automatically.
+
+On **Linux**, re-download the latest `app` from the Releases page.
 
 Releases are published automatically when a `v*` tag is pushed, and every build
 ships a SHA-256 checksum the updater verifies before installing.

@@ -17,6 +17,39 @@ from paths import resource_path, user_data_path, seed_user_data, FROZEN
 # Copy bundled default config (theme.json) out next to the exe on first launch.
 seed_user_data()
 
+
+def _apply_pending_update_on_startup():
+    """Apply an update a previous session downloaded but never installed.
+
+    Auto-update stages a new exe (``<exe>.new``) plus a ``_update.bat`` swap
+    script. If the user just closes the app instead of clicking "Restart &
+    Update", those files survive; on the next launch we run the swap so the
+    update actually applies on restart (matching the staged message). No-op
+    unless frozen with a pending update. Runs before anything binds port 5000
+    or kicks off a fresh update check.
+    """
+    if not FROZEN:
+        return
+    current_exe = sys.executable
+    bat = os.path.join(os.path.dirname(current_exe), "_update.bat")
+    new_exe = current_exe + ".new"
+    if not (os.path.exists(bat) and os.path.exists(new_exe)):
+        return
+    print("[Update] Staged update found — applying on launch...", flush=True)
+    try:
+        import subprocess
+        subprocess.Popen(
+            ["cmd", "/c", bat], close_fds=True,
+            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+        )
+    except Exception as e:
+        print(f"[Update] Could not launch staged update: {e}", flush=True)
+        return
+    os._exit(0)
+
+
+_apply_pending_update_on_startup()
+
 # Make HTTPS certificate verification work inside the PyInstaller bundle (where
 # the system trust store is often unavailable) WITHOUT disabling validation.
 try:
@@ -43,7 +76,7 @@ except ImportError:
 # =====================
 # Version / Update config
 # =====================
-CURRENT_VERSION = "1.0.4"
+CURRENT_VERSION = "1.0.5"
 GITHUB_REPO = "DevinProv/ssbl-suite"   # your app repo (for updates)
 DATA_REPO = ""                          # set at runtime from sync config
 
@@ -276,14 +309,23 @@ def _do_update(download_url, latest_version, expected_sha256):
                 f"checksum mismatch (expected {expected_sha256}, got {actual})"
             )
 
+        # NOTE: `timeout` reads the console and fails ("Input redirection is not
+        # supported") when the script runs without one, so we wait with `ping`
+        # instead. We log each step and restore the backup if the swap fails, so
+        # a botched update never leaves the user without a working exe.
         with open(bat, "w") as f:
             f.write(
-                f"@echo off\r\n"
-                f"timeout /t 2 /nobreak > nul\r\n"
-                f"move /y \"{current_exe}\" \"{backup_exe}\"\r\n"
-                f"move /y \"{new_exe}\" \"{current_exe}\"\r\n"
-                f"start \"\" \"{current_exe}\"\r\n"
-                f"del \"%~f0\"\r\n"
+                '@echo off\r\n'
+                'set "LOG=%~dp0_update.log"\r\n'
+                'echo update starting %date% %time% > "%LOG%"\r\n'
+                'rem wait for the old app to exit and release port 5000\r\n'
+                'ping -n 5 127.0.0.1 >nul\r\n'
+                f'move /y "{current_exe}" "{backup_exe}" >> "%LOG%" 2>&1\r\n'
+                f'if not exist "{current_exe}" move /y "{new_exe}" "{current_exe}" >> "%LOG%" 2>&1\r\n'
+                f'if not exist "{current_exe}" move /y "{backup_exe}" "{current_exe}" >> "%LOG%" 2>&1\r\n'
+                'echo launching %date% %time% >> "%LOG%"\r\n'
+                f'start "" "{current_exe}"\r\n'
+                'del "%~f0"\r\n'
             )
 
         app._update_pending = bat
@@ -321,9 +363,23 @@ def apply_update():
         return jsonify({"error": "Update script missing — re-check for updates"}), 400
 
     import subprocess
-    subprocess.Popen(["cmd", "/c", bat], shell=False,
-                     creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0)
-    os.kill(os.getpid(), 9)
+    import time
+
+    # Detach the swap script so it survives this process being killed. On its
+    # own console-less process it waits, swaps the exe, and relaunches.
+    flags = 0
+    if os.name == "nt":
+        flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+    subprocess.Popen(["cmd", "/c", bat], close_fds=True, creationflags=flags)
+
+    # Reply to the client first, then exit ~0.7s later so the script's wait can
+    # begin against an already-dead process (frees port 5000 for the relaunch).
+    def _shutdown():
+        time.sleep(0.7)
+        os.kill(os.getpid(), 9)
+    threading.Thread(target=_shutdown, daemon=True, name="update-apply").start()
+
+    return jsonify({"ok": True, "applying": True})
 
 # =====================
 # GitHub data-import routes

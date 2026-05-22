@@ -43,6 +43,29 @@
     <main class="content">
         {% block content %}{% endblock %}
     </main>
+
+    <!-- Global "update available" modal (shown when a new version is staged) -->
+    <div class="modal-overlay" id="update-modal-overlay">
+        <div class="modal" style="width:440px;max-width:calc(100vw - 48px)">
+            <div class="modal-header">
+                <span class="modal-title">Update available</span>
+                <button class="modal-close" id="update-modal-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:13px;color:var(--on-surface);line-height:1.6">
+                    <strong id="update-modal-version">A new version</strong> is ready to install.
+                    Updating closes and reopens the app. If you skip it, it'll be applied
+                    automatically the next time you open the app.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" id="update-modal-later">Later</button>
+                <button class="btn-primary" id="update-modal-now">Update &amp; Restart</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/update.js') }}"></script>
 </body>
 
 </html>
